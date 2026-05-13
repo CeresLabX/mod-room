@@ -34,6 +34,15 @@ app.use('/api/upload', uploadRoutes);
 // Health check
 app.get('/api/health', (req, res) => res.json({ status: 'ok', ts: Date.now() }));
 
+// Serve built React app in production
+if (NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, 'public')));
+  // SPA catch-all — serve index.html for any non-API/Socket route
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  });
+}
+
 // Socket.IO setup
 const io = new Server(server, {
   cors: {
