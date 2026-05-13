@@ -175,6 +175,25 @@ router.delete('/:roomId', async (req, res) => {
   }
 });
 
+// Lookup room by room code (e.g. "FOYER-5643")
+router.get('/code/:code', async (req, res) => {
+  try {
+    const { code } = req.params;
+    const db = getDb();
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    // room_code is VARCHAR(10), alphanumeric + hyphen
+    if (!code || !/^[A-Z0-9][A-Z0-9-]{0,9}$/.test(code)) {
+      return res.status(400).json({ error: 'Invalid room code format' });
+    }
+    const roomRes = await db.query('SELECT id FROM rooms WHERE room_code = $1', [code.toUpperCase()]);
+    if (!roomRes.rows.length) return res.status(404).json({ error: 'Room not found' });
+    res.json({ id: roomRes.rows[0].id });
+  } catch (err) {
+    console.error('[/rooms/code/:code GET error]', err.message);
+    res.status(500).json({ error: 'Failed to lookup room', detail: err.message });
+  }
+});
+
 // Get sync state
 router.get('/:roomId/sync', async (req, res) => {
   try {

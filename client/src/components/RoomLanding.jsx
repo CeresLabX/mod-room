@@ -41,7 +41,7 @@ export default function RoomLanding({ theme, applyTheme }) {
     setError('');
     try {
       // Search for room by code
-      const res = await axios.get(`/api/rooms/${code}`);
+      const res = await axios.get(`/api/rooms/code/${code}`);
       localStorage.setItem('modroom-nick', nick);
       navigate(`/room/${res.data.id}`);
     } catch (e) {
