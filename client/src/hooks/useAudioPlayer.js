@@ -12,6 +12,7 @@ export function useAudioPlayer({ item, onEnded, onError }) {
   const sourceRef = useRef(null);
   const analyserRef = useRef(null);
   const animFrameRef = useRef(null);
+  const pendingPlayRef = useRef(false); // track play requests during item load
 
   const cleanup = useCallback(() => {
     if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
@@ -79,6 +80,12 @@ export function useAudioPlayer({ item, onEnded, onError }) {
       });
 
       playerRef.current = player;
+
+      // If a play was requested while loading, fire it now
+      if (pendingPlayRef.current) {
+        pendingPlayRef.current = false;
+        setTimeout(() => player.play().then(() => setStatus('playing')).catch(() => {}), 50);
+      }
     } catch (e) {
       console.error('[player] load failed:', e);
       setStatus('error');
@@ -89,6 +96,7 @@ export function useAudioPlayer({ item, onEnded, onError }) {
   // When item changes, load it
   useEffect(() => {
     if (item) {
+      pendingPlayRef.current = false; // reset on new item
       loadItem(item);
     } else {
       cleanup();
@@ -97,7 +105,11 @@ export function useAudioPlayer({ item, onEnded, onError }) {
   }, [item]);
 
   const play = useCallback(async () => {
-    if (!playerRef.current) return;
+    if (!playerRef.current) {
+      // Player not ready yet — mark pending, loadItem will pick it up
+      pendingPlayRef.current = true;
+      return;
+    }
     try {
       if (audioContextRef.current?.state === 'suspended') {
         await audioContextRef.current.resume();
