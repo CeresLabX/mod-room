@@ -3,6 +3,16 @@ const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { getDb } = require('../db');
 
+// Validate UUID format — return 400 if invalid
+function validateUUID(str, res) {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!str || !uuidRegex.test(str)) {
+    res.status(400).json({ error: 'Invalid room ID format' });
+    return false;
+  }
+  return true;
+}
+
 // Generate a human-readable room code like "VAULT-3921"
 // Note: room_code column is VARCHAR(10), so words must be <= 5 chars
 function generateRoomCode() {
@@ -67,103 +77,127 @@ router.post('/', async (req, res) => {
 
 // Get room
 router.get('/:roomId', async (req, res) => {
-  const { roomId } = req.params;
-  const db = getDb();
+  try {
+    if (!validateUUID(req.params.roomId, res)) return;
+    const { roomId } = req.params;
+    const db = getDb();
 
-  if (!db) return res.status(503).json({ error: 'Database not configured' });
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
 
-  const roomRes = await db.query('SELECT * FROM rooms WHERE id = $1', [roomId]);
-  if (!roomRes.rows.length) return res.status(404).json({ error: 'Room not found' });
+    const roomRes = await db.query('SELECT * FROM rooms WHERE id = $1', [roomId]);
+    if (!roomRes.rows.length) return res.status(404).json({ error: 'Room not found' });
 
-  const room = roomRes.rows[0];
-  const queueRes = await db.query(
-    'SELECT * FROM queue_items WHERE room_id = $1 ORDER BY position ASC',
-    [roomId]
-  );
-  const usersRes = await db.query(
-    'SELECT nickname, is_host FROM room_participants WHERE room_id = $1 ORDER BY last_seen DESC',
-    [roomId]
-  );
+    const room = roomRes.rows[0];
+    const queueRes = await db.query(
+      'SELECT * FROM queue_items WHERE room_id = $1 ORDER BY position ASC',
+      [roomId]
+    );
+    const usersRes = await db.query(
+      'SELECT nickname, is_host FROM room_participants WHERE room_id = $1 ORDER BY last_seen DESC',
+      [roomId]
+    );
 
-  res.json({
-    id: room.id,
-    roomCode: room.room_code,
-    name: room.name,
-    hostNickname: room.host_nickname,
-    playbackStatus: room.playback_status,
-    playbackTimestamp: room.playback_timestamp,
-    currentItemId: room.current_item_id,
-    queue: queueRes.rows.map(q => ({
-      id: q.id, title: q.title, mediaType: q.media_type, url: q.url,
-      filename: q.filename, format: q.format, duration: q.duration,
-      addedBy: q.added_by, position: q.position,
-    })),
-    users: usersRes.rows.map(u => ({ nickname: u.nickname, isHost: u.is_host })),
-  });
+    res.json({
+      id: room.id,
+      roomCode: room.room_code,
+      name: room.name,
+      hostNickname: room.host_nickname,
+      playbackStatus: room.playback_status,
+      playbackTimestamp: room.playback_timestamp,
+      currentItemId: room.current_item_id,
+      queue: queueRes.rows.map(q => ({
+        id: q.id, title: q.title, mediaType: q.media_type, url: q.url,
+        filename: q.filename, format: q.format, duration: q.duration,
+        addedBy: q.added_by, position: q.position,
+      })),
+      users: usersRes.rows.map(u => ({ nickname: u.nickname, isHost: u.is_host })),
+    });
+  } catch (err) {
+    console.error('[/rooms/:roomId GET error]', err.message);
+    res.status(500).json({ error: 'Failed to get room', detail: err.message });
+  }
 });
 
 // Join room
 router.post('/:roomId/join', async (req, res) => {
-  const { roomId } = req.params;
-  const { nickname } = req.body;
-  const db = getDb();
+  try {
+    if (!validateUUID(req.params.roomId, res)) return;
+    const { roomId } = req.params;
+    const { nickname } = req.body;
+    const db = getDb();
 
-  if (!nickname || typeof nickname !== 'string') {
-    return res.status(400).json({ error: 'nickname is required' });
+    if (!nickname || typeof nickname !== 'string') {
+      return res.status(400).json({ error: 'nickname is required' });
+    }
+
+    const safeNickname = sanitize(nickname.trim()).slice(0, 50);
+    if (!safeNickname) return res.status(400).json({ error: 'Invalid nickname' });
+
+    if (!db) return res.json({ roomId, nickname: safeNickname });
+
+    const roomRes = await db.query('SELECT * FROM rooms WHERE id = $1', [roomId]);
+    if (!roomRes.rows.length) return res.status(404).json({ error: 'Room not found' });
+
+    await db.query(`
+      INSERT INTO room_participants (room_id, nickname, is_host, last_seen)
+      VALUES ($1, $2, $3, NOW())
+      ON CONFLICT (room_id, nickname) DO UPDATE SET last_seen = NOW()
+    `, [roomId, safeNickname, roomRes.rows[0].host_nickname === safeNickname]);
+
+    res.json({ roomId, nickname: safeNickname });
+  } catch (err) {
+    console.error('[/rooms/:roomId/join POST error]', err.message);
+    res.status(500).json({ error: 'Failed to join room', detail: err.message });
   }
-
-  const safeNickname = sanitize(nickname.trim()).slice(0, 50);
-  if (!safeNickname) return res.status(400).json({ error: 'Invalid nickname' });
-
-  if (!db) return res.json({ roomId, nickname: safeNickname });
-
-  const roomRes = await db.query('SELECT * FROM rooms WHERE id = $1', [roomId]);
-  if (!roomRes.rows.length) return res.status(404).json({ error: 'Room not found' });
-
-  await db.query(`
-    INSERT INTO room_participants (room_id, nickname, is_host, last_seen)
-    VALUES ($1, $2, $3, NOW())
-    ON CONFLICT (room_id, nickname) DO UPDATE SET last_seen = NOW()
-  `, [roomId, safeNickname, roomRes.rows[0].host_nickname === safeNickname]);
-
-  res.json({ roomId, nickname: safeNickname });
 });
 
 // Delete room (host only — must provide correct nickname)
 router.delete('/:roomId', async (req, res) => {
-  const { roomId } = req.params;
-  const { nickname } = req.body;
-  const db = getDb();
+  try {
+    if (!validateUUID(req.params.roomId, res)) return;
+    const { roomId } = req.params;
+    const { nickname } = req.body;
+    const db = getDb();
 
-  if (!db) return res.status(503).json({ error: 'Database not configured' });
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
 
-  const roomRes = await db.query('SELECT * FROM rooms WHERE id = $1', [roomId]);
-  if (!roomRes.rows.length) return res.status(404).json({ error: 'Room not found' });
-  if (roomRes.rows[0].host_nickname !== sanitize(nickname).slice(0, 50)) {
-    return res.status(403).json({ error: 'Only the host can delete the room' });
+    const roomRes = await db.query('SELECT * FROM rooms WHERE id = $1', [roomId]);
+    if (!roomRes.rows.length) return res.status(404).json({ error: 'Room not found' });
+    if (roomRes.rows[0].host_nickname !== sanitize(nickname).slice(0, 50)) {
+      return res.status(403).json({ error: 'Only the host can delete the room' });
+    }
+
+    await db.query('DELETE FROM rooms WHERE id = $1', [roomId]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[/rooms/:roomId DELETE error]', err.message);
+    res.status(500).json({ error: 'Failed to delete room', detail: err.message });
   }
-
-  await db.query('DELETE FROM rooms WHERE id = $1', [roomId]);
-  res.json({ ok: true });
 });
 
 // Get sync state
 router.get('/:roomId/sync', async (req, res) => {
-  const { roomId } = req.params;
-  const db = getDb();
+  try {
+    if (!validateUUID(req.params.roomId, res)) return;
+    const { roomId } = req.params;
+    const db = getDb();
 
-  if (!db) return res.status(503).json({ error: 'Database not configured' });
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
 
-  const roomRes = await db.query('SELECT * FROM rooms WHERE id = $1', [roomId]);
-  if (!roomRes.rows.length) return res.status(404).json({ error: 'Room not found' });
+    const roomRes = await db.query('SELECT * FROM rooms WHERE id = $1', [roomId]);
+    if (!roomRes.rows.length) return res.status(404).json({ error: 'Room not found' });
 
-  const room = roomRes.rows[0];
-  res.json({
-    currentItemId: room.current_item_id,
-    status: room.playback_status,
-    timestamp: room.playback_timestamp,
-    updatedAt: room.playback_updated_at,
-  });
+    const room = roomRes.rows[0];
+    res.json({
+      currentItemId: room.current_item_id,
+      status: room.playback_status,
+      timestamp: room.playback_timestamp,
+      updatedAt: room.playback_updated_at,
+    });
+  } catch (err) {
+    console.error('[/rooms/:roomId/sync GET error]', err.message);
+    res.status(500).json({ error: 'Failed to get sync state', detail: err.message });
+  }
 });
 
 module.exports = router;
