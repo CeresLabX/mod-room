@@ -128,11 +128,10 @@ export function useAudioPlayer({ item, onEnded, onError }) {
         });
       }
       await playerRef.current.play().catch((err) => {
-        // User interaction required — store intent and retry on next user gesture
         console.warn('[player] play blocked:', err.message);
         pendingPlayRef.current = true;
         setStatus('paused');
-        throw err;
+        return;
       });
       setStatus('playing');
     } catch (e) {
