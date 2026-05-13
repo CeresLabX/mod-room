@@ -17,22 +17,25 @@ export function useAudioPlayer({ item, onEnded, onError }) {
   const cleanup = useCallback(() => {
     if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     if (sourceRef.current) { try { sourceRef.current.disconnect(); } catch {} }
+    if (audioContextRef.current) { try { audioContextRef.current.close(); } catch {} }
     if (playerRef.current) {
       playerRef.current.pause();
       playerRef.current.src = '';
       playerRef.current = null;
     }
+    audioContextRef.current = null;
+    sourceRef.current = null;
   }, []);
 
   const initWebAudio = useCallback((element) => {
     if (!element) return;
     try {
+      // Close existing context — createMediaElementSource is single-use per context
       if (audioContextRef.current) {
-        try { sourceRef.current?.disconnect(); } catch {}
-      } else {
-        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+        try { audioContextRef.current.close(); } catch {}
       }
-      const ctx = audioContextRef.current;
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      audioContextRef.current = ctx;
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 64;
       analyserRef.current = analyser;
@@ -43,7 +46,6 @@ export function useAudioPlayer({ item, onEnded, onError }) {
         analyser.connect(ctx.destination);
         sourceRef.current = source;
       } catch (e) {
-        // createMediaElementSource can fail if element is already connected
         console.warn('[player] MediaElementSource failed:', e.message);
         if (ctx.state === 'suspended') ctx.resume().catch(() => {});
       }
@@ -55,6 +57,7 @@ export function useAudioPlayer({ item, onEnded, onError }) {
 
   // Load and play a new item
   const loadItem = useCallback(async (newItem) => {
+    // Capture old player ref so its pending async callbacks stay safe
     cleanup();
     setStatus('loading');
     setCurrentTime(0);
@@ -63,38 +66,31 @@ export function useAudioPlayer({ item, onEnded, onError }) {
     try {
       const player = await getPlayer(newItem, {
         onLoaded: () => {
-          if (playerRef.current) {
-            setDuration(playerRef.current.duration || 0);
-          }
+          if (player) setDuration(player.duration || 0);
         },
         onTimeUpdate: (t) => setCurrentTime(t),
         onEnded: () => { setStatus('idle'); onEnded && onEnded(); },
         onError: (e) => {
-          console.error('[player] error:', e);
+          console.error('[player] error:', e.message || e);
           setStatus('error');
           onError && onError(e);
         },
         onCanPlay: () => {
           setStatus('paused');
-          if (playerRef.current) {
-            playerRef.current.volume = volume;
-            if (analyserRef.current) {
-              // already initialized
-            } else {
-              initWebAudio(playerRef.current);
-            }
+          if (player) {
+            player.volume = volume;
+            initWebAudio(player);
           }
         },
       });
 
       playerRef.current = player;
 
-      // If a play was requested while loading, fire it now
       if (pendingPlayRef.current) {
         pendingPlayRef.current = false;
         setTimeout(() => {
           if (playerRef.current) {
-            player.play().then(() => setStatus('playing')).catch((err) => {
+            playerRef.current.play().then(() => setStatus('playing')).catch((err) => {
               console.warn('[player] auto-play blocked:', err.message);
               setStatus('paused');
             });
