@@ -143,6 +143,13 @@ export default function RoomView({ theme, applyTheme }) {
     emit('join-room', { roomId, nickname });
   }, [roomId]);
 
+  // Keep URL in sync with room code (so shared URLs use code, not UUID)
+  useEffect(() => {
+    if (roomData?.roomCode && roomId !== roomData.roomCode) {
+      window.history.replaceState(null, '', `/room/code/${roomData.roomCode}`);
+    }
+  }, [roomData?.roomCode]);
+
   // Playback handlers
   const handlePlay = () => {
     if (!currentItem) return;
