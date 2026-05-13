@@ -1,5 +1,0 @@
-{
-  "dockerfilePath": "./Dockerfile",
-  "healthcheckPath": "/api/health",
-  "healthcheckPort": 3001
-}
