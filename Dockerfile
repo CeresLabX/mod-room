@@ -13,8 +13,9 @@ COPY server/ ./
 COPY client/ ./client/
 RUN cd /app/client && npm install && npm run build
 
-# Copy built client to public (where Express looks for it)
-RUN cp -r /app/client/dist /app/public
+# The client build already outputs to ../server/public due to vite.config.js
+# But since we're in /app, the build outputs to /app/public
+# No extra copy needed — vite build writes directly to /app/public
 
 # Create uploads dir
 RUN mkdir -p /app/uploads
