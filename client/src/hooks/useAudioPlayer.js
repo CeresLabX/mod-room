@@ -25,20 +25,28 @@ export function useAudioPlayer({ item, onEnded, onError }) {
   }, []);
 
   const initWebAudio = useCallback((element) => {
+    if (!element) return;
     try {
-      if (!audioContextRef.current) {
+      if (audioContextRef.current) {
+        try { sourceRef.current?.disconnect(); } catch {}
+      } else {
         audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
       }
-      if (sourceRef.current) { try { sourceRef.current.disconnect(); } catch {} }
       const ctx = audioContextRef.current;
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 64;
       analyserRef.current = analyser;
       setAnalyserNode(analyser);
-      const source = ctx.createMediaElementSource(element);
-      source.connect(analyser);
-      analyser.connect(ctx.destination);
-      sourceRef.current = source;
+      try {
+        const source = ctx.createMediaElementSource(element);
+        source.connect(analyser);
+        analyser.connect(ctx.destination);
+        sourceRef.current = source;
+      } catch (e) {
+        // createMediaElementSource can fail if element is already connected
+        console.warn('[player] MediaElementSource failed:', e.message);
+        if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+      }
     } catch (e) {
       console.warn('[player] Web Audio init failed:', e);
       setAnalyserNode(null);
@@ -84,7 +92,14 @@ export function useAudioPlayer({ item, onEnded, onError }) {
       // If a play was requested while loading, fire it now
       if (pendingPlayRef.current) {
         pendingPlayRef.current = false;
-        setTimeout(() => player.play().then(() => setStatus('playing')).catch(() => {}), 50);
+        setTimeout(() => {
+          if (playerRef.current) {
+            player.play().then(() => setStatus('playing')).catch((err) => {
+              console.warn('[player] auto-play blocked:', err.message);
+              setStatus('paused');
+            });
+          }
+        }, 50);
       }
     } catch (e) {
       console.error('[player] load failed:', e);
@@ -112,12 +127,20 @@ export function useAudioPlayer({ item, onEnded, onError }) {
     }
     try {
       if (audioContextRef.current?.state === 'suspended') {
-        await audioContextRef.current.resume();
+        await audioContextRef.current.resume().catch((err) => {
+          console.warn('[player] audio resume failed:', err.message);
+        });
       }
-      await playerRef.current.play();
+      await playerRef.current.play().catch((err) => {
+        // User interaction required — store intent and retry on next user gesture
+        console.warn('[player] play blocked:', err.message);
+        pendingPlayRef.current = true;
+        setStatus('paused');
+        throw err;
+      });
       setStatus('playing');
     } catch (e) {
-      console.error('[player] play failed:', e);
+      if (e) console.error('[player] play failed:', e.message || e);
     }
   }, []);
 
