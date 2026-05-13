@@ -1,33 +1,27 @@
-FROM node:20-alpine AS builder
+FROM node:20-slim
 
 WORKDIR /app
 
 # Install server deps
-COPY server/package.json server/package-lock.json* /app/server/
-RUN cd /app/server && npm install
+COPY server/package.json server/package-lock.json* ./
+RUN npm install --production
 
-# Install client deps and build
-COPY client/package.json client/package-lock.json* /app/client/
-RUN cd /app/client && npm install
-COPY client/ /app/client/
-RUN cd /app/client && npm run build
+# Copy server source
+COPY server/ ./
 
-# Production image
-FROM node:20-alpine
+# Build client
+COPY client/ ./client/
+RUN cd /app/client && npm install && npm run build
 
-WORKDIR /app
-
-# Copy built client and server
-COPY --from=builder /app/server /app/server
-COPY --from=builder /app/client/dist /app/server/public
+# Copy built client to public (where Express looks for it)
+RUN cp -r /app/client/dist /app/public
 
 # Create uploads dir
-RUN mkdir -p /app/server/uploads
+RUN mkdir -p /app/uploads
 
-WORKDIR /app/server
 ENV NODE_ENV=production
 ENV PORT=3001
 
 EXPOSE 3001
 
-CMD ["node", "index.js"]
+CMD sleep 5 && node index.js
