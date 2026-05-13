@@ -3,9 +3,10 @@ const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { getDb } = require('../db');
 
-// Generate a human-readable room code like "LOUNGE-7742"
+// Generate a human-readable room code like "VAULT-3921"
+// Note: room_code column is VARCHAR(10), so words must be <= 5 chars
 function generateRoomCode() {
-  const words = ['LOUNGE', 'BASEMENT', 'WAREHOUSE', 'CHILL', 'BOILER', 'STUDIO', 'ATRIUM', 'VAULT', 'HANGAR', 'BUNKER'];
+  const words = ['VAULT', 'CHILL', 'DEN-5', 'DEN-8', 'FOYER', 'STACK'];
   const word = words[Math.floor(Math.random() * words.length)];
   const num = Math.floor(1000 + Math.random() * 9000);
   return `${word}-${num}`;
@@ -22,42 +23,46 @@ function sanitize(str) {
 
 // Create room
 router.post('/', async (req, res) => {
-  const db = getDb();
-  const { nickname } = req.body;
+  try {
+    const db = getDb();
+    const { nickname } = req.body;
 
-  if (!nickname || typeof nickname !== 'string' || nickname.trim().length === 0) {
-    return res.status(400).json({ error: 'nickname is required' });
+    if (!nickname || typeof nickname !== 'string' || nickname.trim().length === 0) {
+      return res.status(400).json({ error: 'nickname is required' });
+    }
+
+    const safeNickname = sanitize(nickname.trim()).slice(0, 50);
+    if (!safeNickname) return res.status(400).json({ error: 'Invalid nickname' });
+
+    let roomCode;
+    let attempts = 0;
+
+    // Find unique code
+    do {
+      roomCode = generateRoomCode();
+      const existing = db ? await db.query('SELECT id FROM rooms WHERE room_code = $1', [roomCode]) : { rows: [] };
+      if (existing.rows.length === 0) break;
+      attempts++;
+    } while (attempts < 10);
+
+    if (!db) {
+      const id = uuidv4();
+      return res.json({ roomId: id, roomCode, nickname: safeNickname });
+    }
+
+    const result = await db.query(
+      `INSERT INTO rooms (room_code, host_nickname, name)
+       VALUES ($1, $2, $3)
+       RETURNING *`,
+      [roomCode, safeNickname, `${safeNickname}'s Room`]
+    );
+
+    const room = result.rows[0];
+    res.json({ roomId: room.id, roomCode: room.room_code, nickname: safeNickname });
+  } catch (err) {
+    console.error('[/rooms POST error]', err.message);
+    res.status(500).json({ error: 'Failed to create room', detail: err.message });
   }
-
-  const safeNickname = sanitize(nickname.trim()).slice(0, 50);
-  if (!safeNickname) return res.status(400).json({ error: 'Invalid nickname' });
-
-  let roomCode;
-  let attempts = 0;
-
-  // Find unique code
-  do {
-    roomCode = generateRoomCode();
-    const existing = db ? await db.query('SELECT id FROM rooms WHERE room_code = $1', [roomCode]) : { rows: [] };
-    if (existing.rows.length === 0) break;
-    attempts++;
-  } while (attempts < 10);
-
-  if (!db) {
-    // In-memory fallback for dev without DB
-    const id = uuidv4();
-    return res.json({ roomId: id, roomCode, nickname: safeNickname });
-  }
-
-  const result = await db.query(
-    `INSERT INTO rooms (room_code, host_nickname, name)
-     VALUES ($1, $2, $3)
-     RETURNING *`,
-    [roomCode, safeNickname, `${safeNickname}'s Room`]
-  );
-
-  const room = result.rows[0];
-  res.json({ roomId: room.id, roomCode: room.room_code, nickname: safeNickname });
 });
 
 // Get room
