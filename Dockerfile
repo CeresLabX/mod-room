@@ -2,21 +2,18 @@ FROM node:20-slim
 
 WORKDIR /app
 
-# Install server deps
+# Copy and install server deps
 COPY server/package.json server/package-lock.json* ./
 RUN npm install --production
 
-# Copy server source
+# Copy full server source
 COPY server/ ./
 
-# Build client
+# Copy client source and build it
 COPY client/ ./client/
 RUN cd /app/client && npm install && npm run build
 
-# The client build already outputs to ../server/public due to vite.config.js
-# But since we're in /app, the build outputs to /app/public
-# No extra copy needed — vite build writes directly to /app/public
-
+# vite's outDir: '../server/public' puts output at /app/server/public
 # Create uploads dir
 RUN mkdir -p /app/uploads
 
