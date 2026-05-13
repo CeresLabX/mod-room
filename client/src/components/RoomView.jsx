@@ -170,6 +170,10 @@ export default function RoomView({ theme, applyTheme }) {
     emit('remove-from-queue', { itemId });
   };
 
+  const handlePlayItem = (itemId) => {
+    emit('play', { itemId });
+  };
+
   const handleReaction = (emoji) => {
     emit('reaction', { emoji });
   };
@@ -235,6 +239,7 @@ export default function RoomView({ theme, applyTheme }) {
           nickname={nickname}
           onAddMedia={() => setShowAddMedia(true)}
           onRemove={handleRemoveFromQueue}
+          onPlayItem={handlePlayItem}
         />
 
         <div className="right-col">

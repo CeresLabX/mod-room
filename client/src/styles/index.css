@@ -702,6 +702,16 @@ label {
   padding: 2px 4px;
 }
 .queue-remove:hover { color: var(--error); text-shadow: 0 0 8px var(--error); }
+.queue-play {
+  font-family: var(--font-main);
+  font-size: var(--font-size-xs);
+  background: transparent;
+  border: none;
+  color: var(--highlight);
+  cursor: pointer;
+  padding: 2px 4px;
+}
+.queue-play:hover { color: var(--success); text-shadow: 0 0 8px var(--success); }
 
 /* ─── RIGHT COLUMN ──────────────────────────────────────────────────────── */
 .right-col {

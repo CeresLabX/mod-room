@@ -167,11 +167,17 @@ io.on('connection', (socket) => {
       socket.emit('error', { message: 'Only the host can control playback' });
       return;
     }
+    const updateCols = ['playback_status = $1', 'playback_updated_at = NOW()'];
+    const updateVals = ['playing', currentRoom];
+    if (itemId) {
+      updateCols.push(`current_item_id = $${updateVals.length + 1}`);
+      updateVals.push(itemId);
+    }
     await db.query(
-      'UPDATE rooms SET playback_status = $1, playback_updated_at = NOW() WHERE id = $2',
-      ['playing', currentRoom]
+      `UPDATE rooms SET ${updateCols.join(', ')} WHERE id = $${updateVals.length}`,
+      updateVals
     );
-    io.to(currentRoom).emit('playback-update', { itemId, status: 'playing', timestamp: Date.now() });
+    io.to(currentRoom).emit('playback-update', { itemId: itemId || roomRes.rows[0].current_item_id, status: 'playing', timestamp: 0 });
   });
 
   socket.on('pause', async () => {
@@ -275,13 +281,15 @@ io.on('connection', (socket) => {
     );
     const newItem = insertRes.rows[0];
 
-    // If nothing is playing, set as current
+    // If nothing is playing, set as current and auto-start playback
     const roomRes = await db.query('SELECT * FROM rooms WHERE id = $1', [currentRoom]);
-    if (roomRes.rows[0].playback_status === 'idle' || !roomRes.rows[0].current_item_id) {
+    const wasIdle = roomRes.rows[0].playback_status === 'idle' || !roomRes.rows[0].current_item_id;
+    if (wasIdle) {
       await db.query(
         'UPDATE rooms SET current_item_id = $1, playback_status = $2 WHERE id = $3',
-        [newItem.id, 'idle', currentRoom]
+        [newItem.id, 'playing', currentRoom]
       );
+      io.to(currentRoom).emit('playback-update', { itemId: newItem.id, status: 'playing', timestamp: 0 });
     }
 
     const queueRes = await db.query(

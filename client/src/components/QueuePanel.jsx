@@ -15,7 +15,7 @@ function getBadgeClass(format) {
   return 'badge-audio';
 }
 
-export default function QueuePanel({ queue, currentItemId, isHost, nickname, onAddMedia, onRemove }) {
+export default function QueuePanel({ queue, currentItemId, isHost, nickname, onAddMedia, onRemove, onPlayItem }) {
   return (
     <div className="queue-panel">
       <div className="queue-header">
@@ -65,6 +65,14 @@ export default function QueuePanel({ queue, currentItemId, isHost, nickname, onA
                     )}
                   </div>
                 </div>
+
+                <button
+                  className="queue-play"
+                  onClick={() => onPlayItem(item.id)}
+                  title="Play this item"
+                >
+                  [▶]
+                </button>
 
                 {(isHost || item.addedBy === nickname) && (
                   <button
