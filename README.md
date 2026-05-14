@@ -52,7 +52,7 @@ cd server && npm start
 | `NODE_ENV` | No | `development` | Set to `production` for prod |
 | `MAX_UPLOAD_SIZE_MB` | No | `100` | Max upload file size |
 | `KOOFR_EMAIL` | No | — | Koofr account email for WebDAV |
-| `KOOFR_PASSWORD` | No | — | Koofr account password for WebDAV |
+| `KOOFR_PASSWORD` | No | — | Koofr WebDAV app password/token. Do **not** commit this value. |
 
 ---
 
@@ -87,9 +87,35 @@ cd server && npm start
 
 ---
 
+## Koofr MOD Playback
+
+MOD Room can browse and stream tracker files directly from Koofr through the server-side WebDAV proxy.
+
+- Default Koofr folder: `/public/music/mod/`
+- Browser endpoint: `GET /api/koofr/list?path=/public/music/mod`
+- File proxy endpoint: `GET /api/koofr/file?path=/public/music/mod/<file.mod>`
+- The proxy keeps credentials server-side and adds CORS-safe headers for browser playback.
+- Koofr file streams are bounded with a timeout so an upstream stall does not wedge the app.
+- Tracker playback uses `useModPlayer.js` + `modplayer` AudioWorklet. Play/pause is controlled by `AudioContext.resume()` / `AudioContext.suspend()`.
+
+### 2026-05 Koofr/MOD crash fix
+
+A production crash/hang was fixed where loading a Koofr `.mod` file and pressing play could wedge the Railway service until restart.
+
+Key fixes:
+- Hydrate the current queue item after `queue-updated` / `playback-update` races.
+- Avoid double-loading items in `PlayerPanel`.
+- Use AudioContext resume/suspend for MOD playback instead of nonexistent `start/pause/stop` worklet methods.
+- Add timeout/backpressure handling to `/api/koofr/file`.
+- Wrap the socket `play` handler so playback DB/socket errors return an error message instead of killing the process.
+
+Verified against Koofr file `2little.mod` on production: the file loads, appears as now playing, timer advances, and the service health remains OK.
+
+---
+
 ## Known Limitations
 
-- **MOD/tracker playback** uses `modplayer` AudioWorklet — Protracker engine compiled to WebAssembly via AudioWorklet. Accurate Amiga-style playback in browser.
+- **MOD/tracker playback** uses `modplayer` AudioWorklet — Protracker engine compiled to WebAssembly via AudioWorklet. Seeking by pattern/row is not implemented yet.
 - **MIDI** uses software synthesis (no external SoundFont loading in v1).
 - **YouTube sync** is approximate — ±2-3 seconds drift possible.
 - **No accounts** — Nicknames only. Rooms persist for 24h of inactivity.
