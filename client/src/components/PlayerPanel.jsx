@@ -80,6 +80,57 @@ export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onP
     return () => document.removeEventListener('click', unlockAudio);
   }, [autoplayBlocked, playback.status, play, clearAutoplayBlocked]);
 
+  // Keep refs for periodic sync interval
+  const playbackRef = useRef(playback);
+  useEffect(() => {
+    playbackRef.current = playback;
+  }, [playback]);
+
+  const syncStateRef = useRef({ currentTime, status, syncTo, play, isMod });
+  useEffect(() => {
+    syncStateRef.current = { currentTime, status, syncTo, play, isMod };
+  }, [currentTime, status, syncTo, play, isMod]);
+
+  // Periodic sync interval — every 3 seconds, correct drift
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const p = playbackRef.current;
+      const s = syncStateRef.current;
+
+      // Skip if we don't have the new sync fields yet (backward compat)
+      if (!p.positionMsAtLastUpdate || !p.serverUpdatedAt) return;
+
+      // Calculate expected position
+      let expectedMs = p.positionMsAtLastUpdate;
+      if (p.isPlaying) {
+        const now = Date.now();
+        if (p.serverTime && p.expectedPositionMs !== undefined) {
+          expectedMs = p.expectedPositionMs + (now - p.serverTime);
+        } else {
+          // Fallback: assume client/server clocks are roughly in sync
+          expectedMs = p.positionMsAtLastUpdate + (now - p.serverUpdatedAt);
+        }
+      }
+
+      const expectedSec = expectedMs / 1000;
+      const drift = Math.abs(s.currentTime - expectedSec);
+
+      // Skip drift correction for MOD files (seeking not supported)
+      if (!s.isMod && drift > 2) {
+        console.log(`[sync] Drift ${drift.toFixed(1)}s, seeking to ${expectedSec.toFixed(1)}s`);
+        s.syncTo(expectedSec);
+      }
+
+      // If should be playing but is paused, attempt play
+      if (p.status === 'playing' && s.status !== 'playing') {
+        s.play().catch(() => {});
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleProgressClick = (e) => {
     if (!duration) return;
     const rect = e.currentTarget.getBoundingClientRect();

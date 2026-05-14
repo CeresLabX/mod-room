@@ -9,6 +9,7 @@ const { initDb, getDb } = require('./db');
 const roomRoutes = require('./routes/rooms');
 const uploadRoutes = require('./routes/upload');
 const koofrRoutes = require('./routes/koofr');
+const roomSync = require('./roomSync');
 
 const app = express();
 const server = http.createServer(app);
@@ -61,11 +62,9 @@ const io = new Server(server, {
   path: '/socket.io',
 });
 
-// Track connected sockets per room
-const roomSockets = new Map(); // roomId → Set of socket ids
-
 function getRoomClients(roomId) {
-  return (roomSockets.get(roomId) || new Set()).size;
+  const room = roomSync.getActiveRooms().get(roomId);
+  return room ? room.connectedUsers.size : 0;
 }
 
 io.on('connection', (socket) => {
@@ -110,8 +109,12 @@ io.on('connection', (socket) => {
 
     socket.join(roomId);
 
-    if (!roomSockets.has(roomId)) roomSockets.set(roomId, new Set());
-    roomSockets.get(roomId).add(socket.id);
+    // Register in in-memory sync service
+    const roomSyncState = roomSync.initPlaybackStateFromDb(roomId, room);
+    roomSyncState.connectedUsers.add(socket.id);
+    if (!roomSyncState.heartbeatInterval) {
+      roomSync.startRoomHeartbeat(io, roomId);
+    }
 
     // Upsert participant
     await db.query(`
@@ -130,6 +133,10 @@ io.on('connection', (socket) => {
       [roomId]
     );
 
+    const roomSyncForBroadcast = roomSync.getOrCreateActiveRoom(roomId);
+    const broadcastState = roomSync.buildPlaybackBroadcast(roomSyncForBroadcast);
+    const expectedPositionMs = broadcastState?.expectedPositionMs || 0;
+
     socket.emit('room-state', {
       room: {
         id: room.id,
@@ -139,6 +146,8 @@ io.on('connection', (socket) => {
         playbackStatus: room.playback_status,
         playbackTimestamp: room.playback_timestamp,
         currentItemId: room.current_item_id,
+        serverTime: Date.now(),
+        expectedPositionMs,
       },
       queue: queueRes.rows.map(q => ({
         id: q.id,
@@ -156,6 +165,7 @@ io.on('connection', (socket) => {
         isHost: u.is_host,
       })),
       clientsCount: getRoomClients(roomId),
+      playback: broadcastState,
     });
 
     // Broadcast join to room
@@ -167,7 +177,7 @@ io.on('connection', (socket) => {
     console.log(`[socket] ${safeNickname} joined room ${roomId} (${getRoomClients(roomId)} clients)`);
   });
 
-  // Host controls
+  // Playback controls
   socket.on('play', async ({ itemId }) => {
     try {
       if (!currentRoom || !currentNickname) return;
@@ -177,8 +187,10 @@ io.on('connection', (socket) => {
         socket.emit('error', { message: 'Room not found' });
         return;
       }
-      const updateCols = ['playback_status = $1', 'playback_updated_at = NOW()'];
-      const updateVals = ['playing'];
+
+      const roomSyncState = roomSync.getOrCreateActiveRoom(currentRoom);
+      let actualItemId = itemId || roomRes.rows[0].current_item_id;
+
       if (itemId) {
         const itemRes = await db.query(
           'SELECT id FROM queue_items WHERE id = $1 AND room_id = $2',
@@ -188,17 +200,23 @@ io.on('connection', (socket) => {
           socket.emit('error', { message: 'That item is no longer in the playlist' });
           return;
         }
-        updateVals.push(itemId);
-        updateCols.push(`current_item_id = $${updateVals.length}`);
-        updateVals.push(0);
-        updateCols.push(`playback_timestamp = $${updateVals.length}`);
+        actualItemId = itemId;
       }
-      updateVals.push(currentRoom);
+
+      roomSync.updatePlaybackState(roomSyncState, {
+        roomId: currentRoom,
+        currentTrackId: actualItemId,
+        isPlaying: true,
+        positionMsAtLastUpdate: 0,
+        startedByUserId: currentNickname,
+      });
+
       await db.query(
-        `UPDATE rooms SET ${updateCols.join(', ')} WHERE id = $${updateVals.length}`,
-        updateVals
+        'UPDATE rooms SET playback_status = $1, current_item_id = $2, playback_timestamp = $3, playback_updated_at = NOW(), last_command_id = $4 WHERE id = $5',
+        ['playing', actualItemId, 0, roomSyncState.playbackState.lastCommandId, currentRoom]
       );
-      io.to(currentRoom).emit('playback-update', { itemId: itemId || roomRes.rows[0].current_item_id, status: 'playing', timestamp: 0 });
+
+      roomSync.broadcastPlaybackState(io, currentRoom);
     } catch (err) {
       console.error('[socket] play failed:', err);
       socket.emit('error', { message: 'Playback failed; please try again.' });
@@ -213,20 +231,41 @@ io.on('connection', (socket) => {
       socket.emit('error', { message: 'Room not found' });
       return;
     }
+
+    const roomSyncState = roomSync.getOrCreateActiveRoom(currentRoom);
+    const currentPosMs = roomSync.calculateExpectedPositionMs(roomSyncState.playbackState);
+
+    roomSync.updatePlaybackState(roomSyncState, {
+      isPlaying: false,
+      positionMsAtLastUpdate: currentPosMs,
+    });
+
     await db.query(
-      'UPDATE rooms SET playback_status = $1, playback_updated_at = NOW() WHERE id = $2',
-      ['paused', currentRoom]
+      'UPDATE rooms SET playback_status = $1, playback_timestamp = $2, playback_updated_at = NOW(), last_command_id = $3 WHERE id = $4',
+      ['paused', currentPosMs / 1000, roomSyncState.playbackState.lastCommandId, currentRoom]
     );
-    io.to(currentRoom).emit('playback-update', { status: 'paused', timestamp: Date.now() });
+
+    roomSync.broadcastPlaybackState(io, currentRoom);
   });
 
   socket.on('seek', async ({ timestamp }) => {
     if (!currentRoom || !currentNickname) return;
     const db = getDb();
+
+    const roomSyncState = roomSync.getOrCreateActiveRoom(currentRoom);
+    const isPlaying = roomSyncState.playbackState?.isPlaying || false;
+
+    roomSync.updatePlaybackState(roomSyncState, {
+      positionMsAtLastUpdate: timestamp * 1000,
+      isPlaying,
+    });
+
     await db.query(
-      'UPDATE rooms SET playback_timestamp = $1, playback_updated_at = NOW() WHERE id = $2',
-      [timestamp, currentRoom]
+      'UPDATE rooms SET playback_timestamp = $1, playback_updated_at = NOW(), last_command_id = $2 WHERE id = $3',
+      [timestamp, roomSyncState.playbackState.lastCommandId, currentRoom]
     );
+
+    roomSync.broadcastPlaybackState(io, currentRoom);
     io.to(currentRoom).emit('seek', { timestamp });
   });
 
@@ -239,8 +278,8 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // Move to the next playlist item without deleting the previous item.
-    // A playlist should remain a playlist; skip/auto-next only changes the current pointer.
+    const roomSyncState = roomSync.getOrCreateActiveRoom(currentRoom);
+
     const queueRes = await db.query(
       'SELECT * FROM queue_items WHERE room_id = $1 ORDER BY position ASC',
       [currentRoom]
@@ -250,19 +289,31 @@ io.on('connection', (socket) => {
     const nextItem = queue[currentIndex >= 0 ? currentIndex + 1 : 0];
 
     if (!nextItem) {
+      roomSync.updatePlaybackState(roomSyncState, {
+        currentTrackId: null,
+        isPlaying: false,
+        positionMsAtLastUpdate: 0,
+      });
       await db.query(
-        'UPDATE rooms SET playback_status = $1, current_item_id = NULL, playback_timestamp = 0 WHERE id = $2',
-        ['idle', currentRoom]
+        'UPDATE rooms SET playback_status = $1, current_item_id = NULL, playback_timestamp = 0, playback_updated_at = NOW(), last_command_id = $2 WHERE id = $3',
+        ['idle', roomSyncState.playbackState.lastCommandId, currentRoom]
       );
-      io.to(currentRoom).emit('playback-update', { status: 'idle', itemId: null, timestamp: 0 });
+      roomSync.broadcastPlaybackState(io, currentRoom);
       return;
     }
 
+    roomSync.updatePlaybackState(roomSyncState, {
+      currentTrackId: nextItem.id,
+      isPlaying: true,
+      positionMsAtLastUpdate: 0,
+    });
+
     await db.query(
-      'UPDATE rooms SET current_item_id = $1, playback_status = $2, playback_timestamp = 0, playback_updated_at = NOW() WHERE id = $3',
-      [nextItem.id, 'playing', currentRoom]
+      'UPDATE rooms SET current_item_id = $1, playback_status = $2, playback_timestamp = 0, playback_updated_at = NOW(), last_command_id = $3 WHERE id = $4',
+      [nextItem.id, 'playing', roomSyncState.playbackState.lastCommandId, currentRoom]
     );
-    io.to(currentRoom).emit('playback-update', { itemId: nextItem.id, status: 'playing', timestamp: 0 });
+
+    roomSync.broadcastPlaybackState(io, currentRoom);
     io.to(currentRoom).emit('queue-updated', { queue: queue.map(q => ({
       id: q.id, title: q.title, mediaType: q.media_type, url: q.url,
       filename: q.filename, format: q.format, duration: q.duration,
@@ -302,9 +353,17 @@ io.on('connection', (socket) => {
     const roomRes = await db.query('SELECT * FROM rooms WHERE id = $1', [currentRoom]);
     const wasIdle = roomRes.rows[0].playback_status === 'idle' || !roomRes.rows[0].current_item_id;
     if (wasIdle) {
+      const roomSyncState = roomSync.getOrCreateActiveRoom(currentRoom);
+      roomSync.updatePlaybackState(roomSyncState, {
+        roomId: currentRoom,
+        currentTrackId: newItem.id,
+        isPlaying: true,
+        positionMsAtLastUpdate: 0,
+        startedByUserId: currentNickname,
+      });
       await db.query(
-        'UPDATE rooms SET current_item_id = $1, playback_status = $2 WHERE id = $3',
-        [newItem.id, 'playing', currentRoom]
+        'UPDATE rooms SET current_item_id = $1, playback_status = $2, playback_timestamp = 0, playback_updated_at = NOW(), last_command_id = $3 WHERE id = $4',
+        [newItem.id, 'playing', roomSyncState.playbackState.lastCommandId, currentRoom]
       );
     }
 
@@ -321,7 +380,7 @@ io.on('connection', (socket) => {
       }))
     });
     if (wasIdle) {
-      io.to(currentRoom).emit('playback-update', { itemId: newItem.id, status: 'playing', timestamp: 0 });
+      roomSync.broadcastPlaybackState(io, currentRoom);
     }
     io.to(currentRoom).emit('activity', {
       message: `${currentNickname} added "${newItem.title}"`,
@@ -354,17 +413,29 @@ io.on('connection', (socket) => {
     if (roomRes.rows[0].current_item_id === itemId) {
       const replacement = queueRes.rows.find(q => q.position >= item.position) || queueRes.rows[queueRes.rows.length - 1];
       if (replacement) {
+        const roomSyncState = roomSync.getOrCreateActiveRoom(currentRoom);
+        roomSync.updatePlaybackState(roomSyncState, {
+          currentTrackId: replacement.id,
+          isPlaying: true,
+          positionMsAtLastUpdate: 0,
+        });
         await db.query(
-          'UPDATE rooms SET current_item_id = $1, playback_status = $2, playback_timestamp = 0, playback_updated_at = NOW() WHERE id = $3',
-          [replacement.id, 'playing', currentRoom]
+          'UPDATE rooms SET current_item_id = $1, playback_status = $2, playback_timestamp = 0, playback_updated_at = NOW(), last_command_id = $3 WHERE id = $4',
+          [replacement.id, 'playing', roomSyncState.playbackState.lastCommandId, currentRoom]
         );
-        io.to(currentRoom).emit('playback-update', { itemId: replacement.id, status: 'playing', timestamp: 0 });
+        roomSync.broadcastPlaybackState(io, currentRoom);
       } else {
+        const roomSyncState = roomSync.getOrCreateActiveRoom(currentRoom);
+        roomSync.updatePlaybackState(roomSyncState, {
+          currentTrackId: null,
+          isPlaying: false,
+          positionMsAtLastUpdate: 0,
+        });
         await db.query(
-          'UPDATE rooms SET current_item_id = NULL, playback_status = $1, playback_timestamp = 0, playback_updated_at = NOW() WHERE id = $2',
-          ['idle', currentRoom]
+          'UPDATE rooms SET current_item_id = NULL, playback_status = $1, playback_timestamp = 0, playback_updated_at = NOW(), last_command_id = $2 WHERE id = $3',
+          ['idle', roomSyncState.playbackState.lastCommandId, currentRoom]
         );
-        io.to(currentRoom).emit('playback-update', { itemId: null, status: 'idle', timestamp: 0 });
+        roomSync.broadcastPlaybackState(io, currentRoom);
       }
     }
 
@@ -379,6 +450,12 @@ io.on('connection', (socket) => {
       message: `${currentNickname} removed "${item.title}"`,
       ts: Date.now(),
     });
+  });
+
+  socket.on('room-state-request', async () => {
+    if (!currentRoom) return;
+    const roomSyncState = roomSync.getOrCreateActiveRoom(currentRoom);
+    roomSync.broadcastPlaybackState(io, currentRoom);
   });
 
   socket.on('reaction', async ({ emoji }) => {
@@ -400,17 +477,17 @@ io.on('connection', (socket) => {
         'DELETE FROM room_participants WHERE room_id = $1 AND nickname = $2',
         [currentRoom, currentNickname]
       );
-      const set = roomSockets.get(currentRoom);
-      if (set) {
-        set.delete(socket.id);
-        const count = set.size;
+      const roomSyncState = roomSync.getActiveRooms().get(currentRoom);
+      if (roomSyncState) {
+        roomSyncState.connectedUsers.delete(socket.id);
+        const count = roomSyncState.connectedUsers.size;
         io.to(currentRoom).emit('user-left', {
           nickname: currentNickname,
           clientsCount: count,
         });
         if (count === 0) {
-          // Mark room as inactive — cleaner participants list
-          roomSockets.delete(currentRoom);
+          roomSync.stopRoomHeartbeat(currentRoom);
+          roomSync.deleteActiveRoom(currentRoom);
         }
       }
     }

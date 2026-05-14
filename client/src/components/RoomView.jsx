@@ -43,10 +43,24 @@ export default function RoomView({ theme, applyTheme }) {
     setUsers(data.users || []);
     queueRef.current = data.queue || [];
     usersRef.current = data.users || [];
+
+    // Use expectedPositionMs from server if available (new sync system)
+    const expectedTimestamp = data.room?.expectedPositionMs !== undefined
+      ? data.room.expectedPositionMs / 1000
+      : (data.room?.playbackTimestamp || 0);
+
+    // Store full playback state for periodic sync
+    const playbackData = data.playback || {};
     playbackRef.current = {
       status: data.room.playbackStatus || 'idle',
       itemId: data.room.currentItemId,
-      timestamp: data.room.playbackTimestamp || 0,
+      timestamp: expectedTimestamp,
+      positionMsAtLastUpdate: playbackData.positionMsAtLastUpdate,
+      serverUpdatedAt: playbackData.serverUpdatedAt,
+      isPlaying: playbackData.isPlaying,
+      lastCommandId: playbackData.lastCommandId,
+      expectedPositionMs: data.room?.expectedPositionMs,
+      serverTime: data.room?.serverTime,
     };
     setPlayback({ ...playbackRef.current });
     const item = findCurrentItem(data.queue || [], data.room.currentItemId);
@@ -55,12 +69,24 @@ export default function RoomView({ theme, applyTheme }) {
   }, [nickname, findCurrentItem]);
 
   const handlePlaybackUpdate = useCallback((data) => {
+    // Conflict detection: ignore stale updates
+    if (data.serverUpdatedAt && playbackRef.current.serverUpdatedAt && data.serverUpdatedAt < playbackRef.current.serverUpdatedAt) {
+      console.log('[sync] Ignoring stale playback update');
+      return;
+    }
+
     const nextItemId = data.itemId || playbackRef.current.itemId;
     playbackRef.current = {
       ...playbackRef.current,
       status: data.status,
       itemId: nextItemId,
       timestamp: data.timestamp !== undefined ? data.timestamp : playbackRef.current.timestamp,
+      positionMsAtLastUpdate: data.positionMsAtLastUpdate !== undefined ? data.positionMsAtLastUpdate : playbackRef.current.positionMsAtLastUpdate,
+      serverUpdatedAt: data.serverUpdatedAt !== undefined ? data.serverUpdatedAt : playbackRef.current.serverUpdatedAt,
+      isPlaying: data.isPlaying !== undefined ? data.isPlaying : playbackRef.current.isPlaying,
+      lastCommandId: data.lastCommandId || playbackRef.current.lastCommandId,
+      expectedPositionMs: data.expectedPositionMs !== undefined ? data.expectedPositionMs : playbackRef.current.expectedPositionMs,
+      serverTime: data.serverTime || playbackRef.current.serverTime,
     };
     setPlayback({ ...playbackRef.current });
     if (nextItemId) {
