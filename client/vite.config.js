@@ -1,8 +1,16 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import path from 'path';
 
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    alias: [
+      // Fix broken module field in modplayer package (points to non-existent index.js)
+      { find: /^modplayer$/, replacement: path.resolve('./node_modules/modplayer/index.ts') },
+      { find: /^modplayer\/worklet$/, replacement: path.resolve('./node_modules/modplayer/worklet.ts') },
+    ],
+  },
   server: {
     port: 5173,
     proxy: {

@@ -1,7 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useAudioPlayer } from '../hooks/useAudioPlayer.js';
+import { useModPlayer } from '../hooks/useModPlayer.js';
 import Visualizer from './Visualizer.jsx';
 import VideoPlayer from './VideoPlayer.jsx';
+
+const MOD_FORMATS = new Set(['MOD', 'XM', 'S3M', 'IT', 'AHX', 'MPT', 'MED', 'MTM', '669', 'ULT', 'STM', 'OKT']);
+function isModFormat(item) {
+  if (!item) return false;
+  const fmt = (item.format || '').toUpperCase();
+  const ext = (item.filename || item.url || '').split('.').pop().toUpperCase();
+  return MOD_FORMATS.has(fmt) || MOD_FORMATS.has(ext);
+}
 
 function formatTime(s) {
   if (!s || isNaN(s)) return '0:00';
@@ -13,6 +22,7 @@ function formatTime(s) {
 export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onPause, onSeek, onNext, emit }) {
   const [showVideo, setShowVideo] = useState(false);
   const [localStatus, setLocalStatus] = useState('idle');
+  const itemRef = useRef(item);
 
   const handleEnded = () => {
     emit('next', {});
@@ -22,29 +32,25 @@ export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onP
     console.error('[player] error:', e);
   };
 
-  const {
-    status,
-    currentTime,
-    duration,
-    volume,
-    analyserNode,
-    analyserRef,
-    animFrameRef,
-    playerRef,
-    play,
-    pause,
-    stop,
-    seek,
-    changeVolume,
-    syncTo,
-    loadItem,
-  } = useAudioPlayer({
-    item,
+  // Always call both hooks (React rules: hooks can't be conditional)
+  const modPlayer = useModPlayer({
+    item: isModFormat(item) ? item : null,
     onEnded: handleEnded,
     onError: handlePlayerError,
   });
 
-  // Sync playback state from server
+  const htmlPlayer = useAudioPlayer({
+    item: isModFormat(item) ? null : item,
+    onEnded: handleEnded,
+    onError: handlePlayerError,
+  });
+
+  // Pick the active player based on format
+  const isMod = isModFormat(item);
+  const active = isMod ? modPlayer : htmlPlayer;
+  const { status, currentTime, duration, volume, analyserNode, analyserRef, animFrameRef, playerRef, play, pause, stop, seek, changeVolume, syncTo, loadItem } = active;
+
+  // Keep player in sync with server state
   useEffect(() => {
     if (playback.status === 'playing' && status !== 'playing') {
       play();
@@ -54,15 +60,14 @@ export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onP
     if (playback.timestamp && Math.abs(currentTime - playback.timestamp) > 3) {
       syncTo(playback.timestamp);
     }
-  }, [playback.status, playback.timestamp]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playback.itemId, playback.status, playback.timestamp]);
 
-  // Sync when item changes
+  // Load new item when it changes
   useEffect(() => {
-    if (item) {
+    if (item && item !== itemRef.current) {
+      itemRef.current = item;
       loadItem(item);
-      if (playback.status === 'playing') {
-        setTimeout(play, 100);
-      }
     }
   }, [item?.id]);
 
@@ -91,25 +96,25 @@ export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onP
     }
   };
 
-  // Determine what to show
   const isVideoType = item?.mediaType === 'video' || ['MP4', 'WEBM', 'MPEG'].includes(item?.format);
   const isYouTube = item?.mediaType === 'youtube' || item?.url?.includes('youtube.com') || item?.url?.includes('youtu.be');
-
   const noItem = !item;
 
   return (
     <div className="player-panel">
-      {/* Now playing header */}
       <div className="player-section">
         <div className="now-playing">{'▶ NOW PLAYING'}</div>
         {item ? (
           <>
             <div className="track-title">{item.title || item.filename || 'Unknown'}</div>
             <div className="track-meta">
-              <span className={`badge badge-${item.mediaType || 'audio'}`}>{item.format || 'AUDIO'}</span>
+              <span className={`badge badge-${item.mediaType || 'audio'}`}>
+                {isMod ? 'MOD/TRACKER' : (item.format || 'AUDIO')}
+              </span>
               <span>by {item.addedBy}</span>
               {isYouTube && <span className="badge badge-youtube">YOUTUBE</span>}
               {item.mediaType === 'midi' && <span className="badge badge-midi">MIDI</span>}
+              {isMod && <span className="badge badge-mod">TRACKER</span>}
             </div>
           </>
         ) : (
@@ -117,7 +122,6 @@ export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onP
         )}
       </div>
 
-      {/* Video player or visualizer */}
       <div className="visualizer-section">
         {noItem ? (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
@@ -142,7 +146,6 @@ export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onP
         )}
       </div>
 
-      {/* Controls */}
       <div className="player-section">
         <div className="progress-bar-wrap" onClick={handleProgressClick}>
           <div className="progress-bar">
@@ -192,7 +195,6 @@ export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onP
         </div>
       </div>
 
-      {/* DOS command log */}
       <div className="cmd-log">
         {noItem
           ? 'C:\\MODROOM> Waiting for queue...'
