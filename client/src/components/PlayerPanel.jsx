@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useAudioPlayer } from '../hooks/useAudioPlayer.js';
 import { useModPlayer } from '../hooks/useModPlayer.js';
 import Visualizer from './Visualizer.jsx';
