@@ -33,7 +33,7 @@ export default function RoomView({ theme, applyTheme }) {
 
   // Find current item from queue
   const findCurrentItem = useCallback((q, itemId) => {
-    return q.find(i => i.id === itemId) || q[0] || null;
+    return q.find(i => i.id === itemId) || null;
   }, []);
 
   // Handle room state from server

@@ -5,10 +5,10 @@ const SOCKET_URL = import.meta.env.PROD
   ? window.location.origin
   : 'http://localhost:3001';
 
-export function useSocket({ onRoomState, onPlaybackUpdate, onQueueUpdated,
-  onUserJoined, onUserLeft, onActivity, onReaction, onSeek, onError }) {
-
+export function useSocket(handlers) {
   const socketRef = useRef(null);
+  const handlersRef = useRef(handlers);
+  handlersRef.current = handlers;
 
   useEffect(() => {
     const socket = io(SOCKET_URL, {
@@ -17,15 +17,15 @@ export function useSocket({ onRoomState, onPlaybackUpdate, onQueueUpdated,
     });
     socketRef.current = socket;
 
-    socket.on('room-state', (data) => onRoomState && onRoomState(data));
-    socket.on('playback-update', (data) => onPlaybackUpdate && onPlaybackUpdate(data));
-    socket.on('queue-updated', (data) => onQueueUpdated && onQueueUpdated(data));
-    socket.on('user-joined', (data) => onUserJoined && onUserJoined(data));
-    socket.on('user-left', (data) => onUserLeft && onUserLeft(data));
-    socket.on('activity', (data) => onActivity && onActivity(data));
-    socket.on('reaction', (data) => onReaction && onReaction(data));
-    socket.on('seek', (data) => onSeek && onSeek(data));
-    socket.on('error', (data) => onError && onError(data));
+    socket.on('room-state', (data) => handlersRef.current.onRoomState?.(data));
+    socket.on('playback-update', (data) => handlersRef.current.onPlaybackUpdate?.(data));
+    socket.on('queue-updated', (data) => handlersRef.current.onQueueUpdated?.(data));
+    socket.on('user-joined', (data) => handlersRef.current.onUserJoined?.(data));
+    socket.on('user-left', (data) => handlersRef.current.onUserLeft?.(data));
+    socket.on('activity', (data) => handlersRef.current.onActivity?.(data));
+    socket.on('reaction', (data) => handlersRef.current.onReaction?.(data));
+    socket.on('seek', (data) => handlersRef.current.onSeek?.(data));
+    socket.on('error', (data) => handlersRef.current.onError?.(data));
 
     return () => socket.disconnect();
   }, []);

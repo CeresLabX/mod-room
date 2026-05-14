@@ -104,7 +104,8 @@ export function useAudioPlayer({ item, onEnded, onError }) {
     }
   }, [cleanup, volume, initWebAudio, onEnded, onError]);
 
-  // When item changes, load it
+  // When item changes, load it (key on id to avoid reloads when queue
+  // updates swap object references for the same track)
   useEffect(() => {
     if (item) {
       pendingPlayRef.current = false; // reset on new item
@@ -113,7 +114,8 @@ export function useAudioPlayer({ item, onEnded, onError }) {
       cleanup();
       setStatus('idle');
     }
-  }, [item]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item?.id]);
 
   const play = useCallback(async () => {
     if (!playerRef.current) {

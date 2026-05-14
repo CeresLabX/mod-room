@@ -65,7 +65,7 @@ export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onP
       syncTo(playback.timestamp);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [item?.id, playback.itemId, playback.status, playback.timestamp]);
+  }, [item?.id, playback.itemId, playback.status, playback.timestamp, status]);
 
   const handleProgressClick = (e) => {
     if (!duration) return;
