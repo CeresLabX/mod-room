@@ -1004,3 +1004,53 @@ label {
   }
   .landing-logo { font-size: 5px; }
 }
+
+/* Koofr Browser */
+.koofr-browser {
+  padding: 8px 0;
+}
+
+.koofr-file-list {
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.koofr-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: var(--font-size-xs);
+  border-bottom: 1px solid var(--border);
+  transition: background 0.1s;
+}
+
+.koofr-item:last-child {
+  border-bottom: none;
+}
+
+.koofr-item:hover {
+  background: var(--hover-bg);
+}
+
+.koofr-item.selected {
+  background: var(--accent-dim);
+}
+
+.koofr-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.badge-mod {
+  background: var(--accent);
+  color: #000;
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 2px;
+}

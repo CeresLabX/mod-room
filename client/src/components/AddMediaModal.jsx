@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback } from 'react';
 import axios from 'axios';
+import KoofrBrowser from './KoofrBrowser.jsx';
 import { extractYouTubeId, isYouTubeUrl } from '../utils/mediaHandler.js';
 
 const ALLOWED_AUDIO = ['mp3', 'wav', 'ogg', 'midi', 'mid', 'mod', 'xm', 's3m', 'it'];
@@ -8,7 +9,7 @@ const ALL_ALLOWED = [...ALLOWED_AUDIO, ...ALLOWED_VIDEO];
 const MAX_SIZE_BYTES = 100 * 1024 * 1024;
 
 export default function AddMediaModal({ onAdd, onClose }) {
-  const [tab, setTab] = useState('url'); // 'url' | 'upload'
+  const [tab, setTab] = useState('url'); // 'url' | 'upload' | 'koofr'
   const [urlInput, setUrlInput] = useState('');
   const [youtubeId, setYoutubeId] = useState(null);
   const [urlError, setUrlError] = useState('');
@@ -148,6 +149,12 @@ export default function AddMediaModal({ onAdd, onClose }) {
           >
             UPLOAD
           </button>
+          <button
+            className={`tab ${tab === 'koofr' ? 'active' : ''}`}
+            onClick={() => setTab('koofr')}
+          >
+            KOOFR
+          </button>
         </div>
 
         {tab === 'url' && (
@@ -211,6 +218,10 @@ export default function AddMediaModal({ onAdd, onClose }) {
               </div>
             )}
           </div>
+        )}
+
+        {tab === 'koofr' && (
+          <KoofrBrowser onAdd={onAdd} />
         )}
 
         <div className="format-note">
