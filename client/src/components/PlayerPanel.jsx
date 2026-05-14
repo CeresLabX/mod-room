@@ -97,8 +97,9 @@ export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onP
       const p = playbackRef.current;
       const s = syncStateRef.current;
 
-      // Skip if we don't have the new sync fields yet (backward compat)
-      if (!p.positionMsAtLastUpdate || !p.serverUpdatedAt) return;
+      // Skip if we don't have the new sync fields yet (backward compat).
+      // Important: position 0 is valid, so don't use a falsy check here.
+      if (p.positionMsAtLastUpdate === undefined || p.positionMsAtLastUpdate === null || !p.serverUpdatedAt) return;
 
       // Calculate expected position
       let expectedMs = p.positionMsAtLastUpdate;

@@ -14,6 +14,7 @@ export function useAudioPlayer({ item, onEnded, onError }) {
   const analyserRef = useRef(null);
   const animFrameRef = useRef(null);
   const pendingPlayRef = useRef(false); // track play requests during item load
+  const pendingSyncRef = useRef(null); // target timestamp requested before media is seekable
 
   const cleanup = useCallback(() => {
     if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
@@ -67,7 +68,18 @@ export function useAudioPlayer({ item, onEnded, onError }) {
     try {
       const player = await getPlayer(newItem, {
         onLoaded: () => {
-          if (player) setDuration(player.duration || 0);
+          if (player) {
+            setDuration(player.duration || 0);
+            if (pendingSyncRef.current !== null) {
+              try {
+                player.currentTime = pendingSyncRef.current;
+                setCurrentTime(pendingSyncRef.current);
+                pendingSyncRef.current = null;
+              } catch (e) {
+                console.warn('[player] pending sync failed on metadata:', e.message);
+              }
+            }
+          }
         },
         onTimeUpdate: (t) => setCurrentTime(t),
         onEnded: () => { setStatus('idle'); onEnded && onEnded(); },
@@ -80,6 +92,15 @@ export function useAudioPlayer({ item, onEnded, onError }) {
           setStatus('paused');
           if (player) {
             player.volume = volume;
+            if (pendingSyncRef.current !== null) {
+              try {
+                player.currentTime = pendingSyncRef.current;
+                setCurrentTime(pendingSyncRef.current);
+                pendingSyncRef.current = null;
+              } catch (e) {
+                console.warn('[player] pending sync failed on canplay:', e.message);
+              }
+            }
             initWebAudio(player);
           }
         },
@@ -91,6 +112,15 @@ export function useAudioPlayer({ item, onEnded, onError }) {
         pendingPlayRef.current = false;
         setTimeout(() => {
           if (playerRef.current) {
+            if (pendingSyncRef.current !== null) {
+              try {
+                playerRef.current.currentTime = pendingSyncRef.current;
+                setCurrentTime(pendingSyncRef.current);
+                pendingSyncRef.current = null;
+              } catch (e) {
+                console.warn('[player] pending sync failed before play:', e.message);
+              }
+            }
             playerRef.current.play()
               .then(() => { setAutoplayBlocked(false); setStatus('playing'); })
               .catch((err) => {
@@ -199,7 +229,11 @@ export function useAudioPlayer({ item, onEnded, onError }) {
 
   // Sync position from server
   const syncTo = useCallback((timestamp) => {
-    if (!playerRef.current || !duration) return;
+    if (timestamp === undefined || timestamp === null || Number.isNaN(timestamp)) return;
+    if (!playerRef.current || !duration) {
+      pendingSyncRef.current = timestamp;
+      return;
+    }
     const diff = Math.abs(playerRef.current.currentTime - timestamp);
     if (diff > 3) {
       playerRef.current.currentTime = timestamp;
