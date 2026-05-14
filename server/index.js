@@ -8,6 +8,7 @@ const path = require('path');
 const { initDb, getDb } = require('./db');
 const roomRoutes = require('./routes/rooms');
 const uploadRoutes = require('./routes/upload');
+const koofrRoutes = require('./routes/koofr');
 
 const app = express();
 const server = http.createServer(app);
@@ -30,6 +31,7 @@ app.use('/uploads', express.static(UPLOAD_DIR));
 // API routes
 app.use('/api/rooms', roomRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/koofr', koofrRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => res.json({ status: 'ok', ts: Date.now() }));
