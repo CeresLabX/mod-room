@@ -114,11 +114,42 @@ Verified against Koofr file `2little.mod` on production: the file loads, appears
 
 ### 2026-05 playlist/timing fix
 
-MOD Room queue behavior was updated to act like a normal playlist:
-- Skip/auto-next now advances the current item pointer instead of deleting the played song.
-- Koofr picker stays open after adding a file so multiple songs can be queued quickly.
-- Per-song play buttons show `[PLAY]`, `[LOAD]`, or `[NOW]` with clearer active styling.
-- MOD duration is estimated by simulating the Protracker engine to end-of-song, so the progress bar sizes per track instead of using a static row-count estimate.
+MOD Room queue behavior was updated to act like a normal music playlist.
+
+Symptoms fixed:
+- Koofr/MOD progress bar appeared stuck around a short static duration such as `0:18`.
+- Adding another Koofr song felt like the app only supported one queued item because the picker closed after each add.
+- Auto-next/skip treated the queue like a consumable FIFO list and deleted the played row.
+- Per-song play control was a tiny ambiguous `[▶]` button with no active state.
+
+Implementation:
+- `server/index.js`
+  - `next` now advances `rooms.current_item_id` to the next `queue_items` row without deleting the played song.
+  - direct `play` validates that the requested queue item belongs to the current room.
+  - direct `play` resets `playback_timestamp` to `0` for clean per-track starts.
+  - removing the current item now moves playback to a neighboring playlist item or idles the room if none remain.
+- `client/src/hooks/useModPlayer.js`
+  - `modplayer` worklet is created with `repeat: false` so end-of-song can advance the playlist.
+  - MOD duration is estimated by running the Protracker parser/mixer in memory to end-of-song instead of using the old row-count formula.
+  - duplicate/stale end callbacks are guarded so a track only advances once.
+  - clearing the active item resets MOD status, timer, duration, and worklet node cleanly.
+- `client/src/components/AddMediaModal.jsx` + `KoofrBrowser.jsx`
+  - Koofr adds pass `keepOpen: true` so the modal remains open for rapid playlist building.
+  - Koofr browser shows a confirmation after each add and clears selection for the next song.
+- `client/src/components/QueuePanel.jsx` + `client/src/styles/index.css`
+  - per-song button now shows `[PLAY]`, `[LOAD]`, or `[NOW]`.
+  - active/current item styling is clearer.
+- `client/src/components/PlayerPanel.jsx`
+  - progress percentage is clamped to `0..100`.
+  - local play/pause status is synchronized from the selected player on item/status changes.
+
+Verification:
+- Built production assets with `npm run build`.
+- Syntax checked `server/index.js` and `server/routes/koofr.js`.
+- Pushed Git commit `20f5570 fix: make MOD queue a real playlist` to GitHub `main`.
+- Railway auto-deployed and production served new hashed assets.
+- Production health check returned `200 OK`.
+- Browser smoke test on production created a room, added two Koofr `.mod` files, confirmed the modal stayed open, confirmed two queue rows, saw `[NOW]` on the active item, and verified duration displayed `2:49` instead of the old static `0:18`.
 
 ---
 
