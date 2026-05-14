@@ -100,8 +100,8 @@ io.on('connection', (socket) => {
     // Leave previous room if any
     if (currentRoom) {
       socket.leave(currentRoom);
-      const prevSet = roomSockets.get(currentRoom);
-      if (prevSet) prevSet.delete(socket.id);
+      const prevRoom = roomSync.getActiveRooms().get(currentRoom);
+      if (prevRoom) prevRoom.connectedUsers.delete(socket.id);
     }
 
     currentRoom = roomId;
@@ -507,7 +507,7 @@ function sanitize(str) {
 setInterval(async () => {
   const db = getDb();
   await db.query('UPDATE rooms SET updated_at = NOW() WHERE id = ANY($1)', [
-    Array.from(roomSockets.keys()),
+    Array.from(roomSync.getActiveRooms().keys()),
   ]);
 }, 5 * 60 * 1000);
 
