@@ -51,6 +51,8 @@ cd server && npm start
 | `PORT` | No | `3001` | Server port |
 | `NODE_ENV` | No | `development` | Set to `production` for prod |
 | `MAX_UPLOAD_SIZE_MB` | No | `100` | Max upload file size |
+| `KOOFR_EMAIL` | No | — | Koofr account email for WebDAV |
+| `KOOFR_PASSWORD` | No | — | Koofr account password for WebDAV |
 
 ---
 
@@ -69,12 +71,11 @@ cd server && npm start
 ### Audio
 | Format | Support | Notes |
 |--------|---------|-------|
-| MP3 | ✅ Full | Browser native |
+| MP3 | ✅ Full | Browser native HTML5 Audio |
 | WAV | ✅ Full | Browser native |
 | OGG | ✅ Full | Browser native |
-| MIDI | ⚠️ Partial | Plays via jzz/SoundFont synth — no real instruments |
-| MOD/XM/S3M/IT | ⚠️ Partial | Plays via jzz — tracker formats converted to MIDI-like output |
-| Other | ❌ | Not supported in browser |
+| MIDI | ⚠️ Partial | Plays via jzz/SoundFont synth |
+| MOD/XM/S3M/IT | ✅ Full | Plays via `modplayer` AudioWorklet (Protracker engine) — browse from Koofr |
 
 ### Video
 | Format | Support | Notes |
@@ -88,7 +89,7 @@ cd server && npm start
 
 ## Known Limitations
 
-- **MOD/tracker playback** uses jzz which synthesizes to SoundFont — it won't sound like a real Protracker playback, but it plays.
+- **MOD/tracker playback** uses `modplayer` AudioWorklet — Protracker engine compiled to WebAssembly via AudioWorklet. Accurate Amiga-style playback in browser.
 - **MIDI** uses software synthesis (no external SoundFont loading in v1).
 - **YouTube sync** is approximate — ±2-3 seconds drift possible.
 - **No accounts** — Nicknames only. Rooms persist for 24h of inactivity.
@@ -165,8 +166,9 @@ Railway Persistent Volume (uploads/)
 
 ## Tech Stack
 
-- **Frontend**: React 18, Vite, Socket.IO Client, jzz (MIDI/tracker)
+- **Frontend**: React 18, Vite, Socket.IO Client, `modplayer` (AudioWorklet), jzz (MIDI)
 - **Backend**: Node.js, Express, Socket.IO, PostgreSQL (pg driver)
+- **Media Storage**: Koofr WebDAV (persistent) + Railway filesystem (ephemeral uploads)
 - **Styling**: Plain CSS with custom properties, "Press Start 2P" pixel font
 - **Database**: PostgreSQL (Railway)
 - **Realtime**: Socket.IO WebSocket
@@ -184,13 +186,14 @@ Railway Persistent Volume (uploads/)
 - [x] Basic visualizer
 
 ### Phase 2
-- [ ] YouTube link support
-- [ ] MP4/video upload playback
+- [x] YouTube link support
+- [ ] MP4/video upload playback (ephemeral — files lost on redeploy)
 - [ ] Video + visualizer layout
 - [ ] Better queue controls
 
 ### Phase 3
-- [ ] MOD/tracker playback improvements
+- [x] MOD/tracker playback via AudioWorklet
+- [ ] MOD seeking (pattern/row seeking)
 - [ ] MIDI + external SoundFont
 - [ ] Advanced visualizers (oscilloscope, tracker channels)
 
