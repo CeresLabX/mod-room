@@ -14,11 +14,16 @@ export function useSocket(handlers) {
     const socket = io(SOCKET_URL, {
       path: '/socket.io',
       transports: ['websocket', 'polling'],
+      autoConnect: false,
     });
     socketRef.current = socket;
 
-    socket.on('connect', () => handlersRef.current.onConnect?.({ socket, socketId: socket.id }));
-    socket.on('reconnect', () => handlersRef.current.onConnect?.({ socket, socketId: socket.id, reconnected: true }));
+    const notifyConnected = (reconnected = false) => {
+      handlersRef.current.onConnect?.({ socket, socketId: socket.id, reconnected });
+    };
+
+    socket.on('connect', () => notifyConnected(false));
+    socket.io.on('reconnect', () => notifyConnected(true));
 
     socket.on('room-state', (data) => handlersRef.current.onRoomState?.(data));
     socket.on('playback-update', (data) => handlersRef.current.onPlaybackUpdate?.(data));
@@ -29,6 +34,11 @@ export function useSocket(handlers) {
     socket.on('reaction', (data) => handlersRef.current.onReaction?.(data));
     socket.on('seek', (data) => handlersRef.current.onSeek?.(data));
     socket.on('error', (data) => handlersRef.current.onError?.(data));
+
+    // Connect only after all listeners are attached. This prevents the room
+    // rejoin from being missed on fast refreshes where Socket.IO connects
+    // before React has registered the join handler.
+    socket.connect();
 
     return () => socket.disconnect();
   }, []);
