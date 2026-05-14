@@ -368,3 +368,17 @@ Railway Persistent Volume (uploads/)
 ## License
 
 Private — Kevin Clark / CeresLabX
+
+---
+
+## Server-Authoritative Playback Sync
+
+The room now uses a **server-authoritative sync system** for playback state:
+
+- The server maintains an in-memory `activeRooms` Map with calculated expected playback positions
+- All playback commands (`play`, `pause`, `seek`, `next`) update server state atomically with command IDs for conflict detection
+- Heartbeat broadcasts every 5 seconds recover missed events and keep clients in sync
+- Clients calculate expected positions locally using `serverTimeOffset` and correct drift >2 seconds
+- Backward-compatible payloads ensure smooth migration — old clients see familiar `playback-update` events
+
+See `MOD-ROOM-SPEC.md` in the workspace for the full specification (Sections 1–14).
