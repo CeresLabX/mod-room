@@ -152,11 +152,23 @@ export function useModPlayer({ item, onEnded, onError }) {
     if (!node || !ctx) return;
 
     try {
-      if (ctx.state === 'suspended') await ctx.resume();
+      // Only call resume() if the context is actually suspended — not closed
+      if (ctx.state === 'suspended') {
+        await ctx.resume().catch(err => {
+          console.warn('[modplayer] AudioContext.resume() failed:', err.message);
+          throw err;
+        });
+      }
+      // Guard: do not call start() if context is closed
+      if (ctx.state === 'closed') {
+        console.warn('[modplayer] AudioContext is closed — cannot start playback');
+        return;
+      }
       node.start?.();
       setStatus('playing');
     } catch (err) {
-      console.error('[modplayer] play failed:', err);
+      console.error('[modplayer] play failed:', err.message || err);
+      setStatus('error');
     }
   }, []);
 
