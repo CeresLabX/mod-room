@@ -184,6 +184,40 @@ Verification:
   - Clicked `[NEXT]` → correctly advanced to the next item.
   - Zero console/page errors.
 
+### 2026-05 multi-user sync + seek fix
+
+Symptoms fixed:
+- Non-host users joining a room where music was already playing could see the track but hear nothing — browser autoplay policy blocked AudioContext/audio element playback until user interaction.
+- Clicking the progress bar to seek worked locally for the host but did not synchronize to other users in the room.
+- No way to skip forward/backward within a track.
+
+Root causes:
+- `RoomView.jsx` `onSeekFromServer` only updated `playbackRef.current.timestamp` (a ref) but never called `setPlayback()`. PlayerPanel's sync effect watches `playback.timestamp` state, so remote seek events never triggered `syncTo()` on other users.
+- `useModPlayer.js` and `useAudioPlayer.js` did not detect `NotAllowedError` from `AudioContext.resume()` / `audio.play()`. When a non-host user joined mid-playback, `play()` threw, set status to `'error'`, and the user had no recovery UI.
+- No skip UI existed.
+
+Fixes:
+- `RoomView.jsx`: `onSeekFromServer` now calls `setPlayback(prev => ({ ...prev, timestamp: data.timestamp }))` so the sync effect re-runs and invokes `syncTo()` on all listeners.
+- `useModPlayer.js` and `useAudioPlayer.js`: `play()` now catches `NotAllowedError` specifically, sets `autoplayBlocked = true`, and keeps status as `'paused'`. A `clearAutoplayBlocked()` function is exposed.
+- `PlayerPanel.jsx`: when `autoplayBlocked` is true, a prominent red "🔇 CLICK TO ENABLE AUDIO" button is shown. Clicking it calls `clearAutoplayBlocked()` and `play()`, which succeeds because user interaction has now occurred.
+- `PlayerPanel.jsx`: skip backward (`[⏪ -10s]`) and forward (`[⏩ +10s]`) buttons added for all users. They call `seek(time)` locally and `onSeek(time)` to broadcast to the room. Disabled for MOD files since the modplayer worklet does not support seeking.
+- `PlayerPanel.jsx`: a note "ⓘ Seeking not supported for tracker modules" is shown below the progress bar when a MOD file is active.
+
+Verification:
+- Built production assets with `npm run build`.
+- Syntax checked `server/index.js` and `server/routes/koofr.js`.
+- Pushed Git commit `4fd542b fix: multi-user sync, autoplay unblock, seek sync, and skip buttons` to GitHub `main`.
+- Railway auto-deployed and production served new hashed assets (`index-CdEYp2tt.js`).
+- Production health check returned `200 OK`.
+- Browser multi-user test on production verified:
+  - Host created room, guest joined via room code.
+  - Host added Koofr `2little.mod`; guest saw 1 queue item within seconds.
+  - Guest track title showed `2little.mod`; status showed `▶ SYNCED TO ROOM`.
+  - Host progress advanced from `0:06` to `0:09` over 3 seconds.
+  - Host clicked progress bar to seek; guest progress updated from `0:10` to `0:12` (sync working).
+  - MOD seeking note visible below progress bar.
+  - Zero console/page errors.
+
 ---
 
 ## Known Limitations
