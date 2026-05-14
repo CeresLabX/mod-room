@@ -180,8 +180,18 @@ io.on('connection', (socket) => {
       const updateCols = ['playback_status = $1', 'playback_updated_at = NOW()'];
       const updateVals = ['playing'];
       if (itemId) {
+        const itemRes = await db.query(
+          'SELECT id FROM queue_items WHERE id = $1 AND room_id = $2',
+          [itemId, currentRoom]
+        );
+        if (!itemRes.rows.length) {
+          socket.emit('error', { message: 'That item is no longer in the playlist' });
+          return;
+        }
         updateVals.push(itemId);
         updateCols.push(`current_item_id = $${updateVals.length}`);
+        updateVals.push(0);
+        updateCols.push(`playback_timestamp = $${updateVals.length}`);
       }
       updateVals.push(currentRoom);
       await db.query(
@@ -229,39 +239,31 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // Get next item
+    // Move to the next playlist item without deleting the previous item.
+    // A playlist should remain a playlist; skip/auto-next only changes the current pointer.
     const queueRes = await db.query(
-      'SELECT * FROM queue_items WHERE room_id = $1 ORDER BY position ASC LIMIT 2',
+      'SELECT * FROM queue_items WHERE room_id = $1 ORDER BY position ASC',
       [currentRoom]
     );
-    if (queueRes.rows.length < 2) {
-      // End of queue
+    const queue = queueRes.rows;
+    const currentIndex = queue.findIndex(q => q.id === roomRes.rows[0].current_item_id);
+    const nextItem = queue[currentIndex >= 0 ? currentIndex + 1 : 0];
+
+    if (!nextItem) {
       await db.query(
         'UPDATE rooms SET playback_status = $1, current_item_id = NULL, playback_timestamp = 0 WHERE id = $2',
         ['idle', currentRoom]
       );
-      io.to(currentRoom).emit('playback-update', { status: 'idle', itemId: null });
+      io.to(currentRoom).emit('playback-update', { status: 'idle', itemId: null, timestamp: 0 });
       return;
     }
 
-    const nextItem = queueRes.rows[1];
     await db.query(
       'UPDATE rooms SET current_item_id = $1, playback_status = $2, playback_timestamp = 0, playback_updated_at = NOW() WHERE id = $3',
       [nextItem.id, 'playing', currentRoom]
     );
-    // Remove played item
-    await db.query('DELETE FROM queue_items WHERE id = $1', [queueRes.rows[0].id]);
-    // Reorder remaining
-    await db.query(
-      'UPDATE queue_items SET position = position - 1 WHERE room_id = $1 AND position > 1',
-      [currentRoom]
-    );
-    const newQueue = await db.query(
-      'SELECT * FROM queue_items WHERE room_id = $1 ORDER BY position ASC',
-      [currentRoom]
-    );
     io.to(currentRoom).emit('playback-update', { itemId: nextItem.id, status: 'playing', timestamp: 0 });
-    io.to(currentRoom).emit('queue-updated', { queue: newQueue.rows.map(q => ({
+    io.to(currentRoom).emit('queue-updated', { queue: queue.map(q => ({
       id: q.id, title: q.title, mediaType: q.media_type, url: q.url,
       filename: q.filename, format: q.format, duration: q.duration,
       addedBy: q.added_by, position: q.position,
@@ -354,6 +356,24 @@ io.on('connection', (socket) => {
       'SELECT * FROM queue_items WHERE room_id = $1 ORDER BY position ASC',
       [currentRoom]
     );
+
+    if (roomRes.rows[0].current_item_id === itemId) {
+      const replacement = queueRes.rows.find(q => q.position >= item.position) || queueRes.rows[queueRes.rows.length - 1];
+      if (replacement) {
+        await db.query(
+          'UPDATE rooms SET current_item_id = $1, playback_status = $2, playback_timestamp = 0, playback_updated_at = NOW() WHERE id = $3',
+          [replacement.id, 'playing', currentRoom]
+        );
+        io.to(currentRoom).emit('playback-update', { itemId: replacement.id, status: 'playing', timestamp: 0 });
+      } else {
+        await db.query(
+          'UPDATE rooms SET current_item_id = NULL, playback_status = $1, playback_timestamp = 0, playback_updated_at = NOW() WHERE id = $2',
+          ['idle', currentRoom]
+        );
+        io.to(currentRoom).emit('playback-update', { itemId: null, status: 'idle', timestamp: 0 });
+      }
+    }
+
     io.to(currentRoom).emit('queue-updated', {
       queue: queueRes.rows.map(q => ({
         id: q.id, title: q.title, mediaType: q.media_type, url: q.url,

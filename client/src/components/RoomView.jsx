@@ -185,9 +185,11 @@ export default function RoomView({ theme, applyTheme }) {
     emit('next', {});
   };
 
-  const handleAddToQueue = (item) => {
+  const handleAddToQueue = (item, options = {}) => {
     emit('add-to-queue', { item });
-    setShowAddMedia(false);
+    if (!options.keepOpen) {
+      setShowAddMedia(false);
+    }
   };
 
   const handleRemoveFromQueue = (itemId) => {
@@ -259,6 +261,7 @@ export default function RoomView({ theme, applyTheme }) {
         <QueuePanel
           queue={queue}
           currentItemId={currentItem?.id}
+          playbackStatus={playback.status}
           isHost={isHost}
           nickname={nickname}
           onAddMedia={() => setShowAddMedia(true)}

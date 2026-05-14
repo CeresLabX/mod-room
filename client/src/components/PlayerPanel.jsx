@@ -48,6 +48,11 @@ export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onP
   const isMod = isModFormat(item);
   const active = isMod ? modPlayer : htmlPlayer;
   const { status, currentTime, duration, volume, analyserNode, analyserRef, animFrameRef, playerRef, play, pause, stop, seek, changeVolume, syncTo } = active;
+  const progressPct = duration ? Math.min(100, Math.max(0, (currentTime / duration) * 100)) : 0;
+
+  useEffect(() => {
+    setLocalStatus(status);
+  }, [status, item?.id]);
 
   // Keep player in sync with server state
   useEffect(() => {
@@ -142,7 +147,7 @@ export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onP
           <div className="progress-bar">
             <div
               className="progress-bar-fill"
-              style={{ width: duration ? `${(currentTime / duration) * 100}%` : '0%' }}
+              style={{ width: `${progressPct}%` }}
             />
           </div>
           <div className="progress-time">

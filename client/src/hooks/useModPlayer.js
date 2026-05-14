@@ -30,6 +30,28 @@ async function getWorkletUrl() {
   return workletLoadPromise;
 }
 
+function estimateProtrackerDuration(buffer) {
+  const protracker = new Protracker();
+  if (!protracker.parse(buffer)) return 0;
+
+  protracker.initialize();
+  protracker.flags = 1 + 2;
+  protracker.repeat = false;
+  protracker.play();
+
+  const chunkSize = 2048;
+  const channels = [new Float32Array(chunkSize), new Float32Array(chunkSize)];
+  const maxSamples = protracker.samplerate * 60 * 15; // hard cap: 15 minutes
+  let samples = 0;
+
+  while (!protracker.endofsong && samples < maxSamples) {
+    protracker.mix(channels);
+    samples += chunkSize;
+  }
+
+  return samples / protracker.samplerate;
+}
+
 export function useModPlayer({ item, onEnded, onError }) {
   const [status, setStatus] = useState('idle'); // idle, loading, playing, paused, error
   const [currentTime, setCurrentTime] = useState(0);
@@ -45,6 +67,18 @@ export function useModPlayer({ item, onEnded, onError }) {
   const positionTimerRef = useRef(null);
   const pendingPlayRef = useRef(false);
   const statusRef = useRef('idle');
+  const durationRef = useRef(0);
+  const endedRef = useRef(false);
+  const onEndedRef = useRef(onEnded);
+  const onErrorRef = useRef(onError);
+
+  useEffect(() => {
+    onEndedRef.current = onEnded;
+  }, [onEnded]);
+
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
 
   useEffect(() => {
     statusRef.current = status;
@@ -75,7 +109,10 @@ export function useModPlayer({ item, onEnded, onError }) {
     try {
       setStatus('loading');
       currentItemRef.current = newItem;
+      endedRef.current = false;
       setCurrentTime(0);
+      setDuration(0);
+      durationRef.current = 0;
 
       // Stop any current playback
       if (workletNodeRef.current) {
@@ -106,7 +143,7 @@ export function useModPlayer({ item, onEnded, onError }) {
       // is true, so pause/play is handled by suspending/resuming the context.
       const ext = (newItem.filename || newItem.url).split('.').pop().toLowerCase();
       const workletNode = loadWorkletFromBuffer(ext, uint8, ctx, {
-        options: { autoplay: true, repeat: true },
+        options: { autoplay: true, repeat: false },
       });
 
       // Reconnect to our analyser chain
@@ -114,20 +151,12 @@ export function useModPlayer({ item, onEnded, onError }) {
       analyserRef.current.connect(ctx.destination);
       workletNodeRef.current = workletNode;
 
-      // Estimate duration from Protracker
-      const protracker = new Protracker();
-      if (protracker.parse(uint8)) {
-        protracker.initialize();
-        // songlen is in positions, speed is rows/beat, bpm is beats/minute
-        const songLen = protracker.songlen || 64;
-        const speed = protracker.speed || 6;
-        const bpm = protracker.bpm || 125;
-        const rowsPerPos = 64;
-        const seconds = (songLen * rowsPerPos * speed) / (bpm * 2.5);
-        setDuration(Math.max(seconds, 10));
-      } else {
-        setDuration(0);
-      }
+      // Estimate duration by simulating the Protracker engine to the actual end
+      // of the song. The old row-count formula made many songs show the same
+      // short/static length and broke the progress bar.
+      const seconds = estimateProtrackerDuration(uint8);
+      durationRef.current = seconds;
+      setDuration(seconds);
 
       // Track position for UI
       if (positionTimerRef.current) clearInterval(positionTimerRef.current);
@@ -135,6 +164,19 @@ export function useModPlayer({ item, onEnded, onError }) {
       positionTimerRef.current = setInterval(() => {
         if (statusRef.current === 'playing') {
           elapsed += 0.25;
+          const songDuration = durationRef.current;
+          if (songDuration > 0 && elapsed >= songDuration) {
+            elapsed = songDuration;
+            setCurrentTime(songDuration);
+            setStatus('idle');
+            if (!endedRef.current) {
+              endedRef.current = true;
+              onEndedRef.current && onEndedRef.current();
+            }
+            clearInterval(positionTimerRef.current);
+            positionTimerRef.current = null;
+            return;
+          }
           setCurrentTime(elapsed);
         }
       }, 250);
@@ -152,20 +194,19 @@ export function useModPlayer({ item, onEnded, onError }) {
       workletNode.port.onmessage = (e) => {
         if (e.data?.type === 'ended') {
           setStatus('idle');
-          onEnded && onEnded();
+          if (!endedRef.current) {
+            endedRef.current = true;
+            onEndedRef.current && onEndedRef.current();
+          }
         }
       };
 
-      // Autoplay if requested
-      if (newItem.autoPlay) {
-        setTimeout(() => play(), 100);
-      }
     } catch (err) {
       console.error('[modplayer] load failed:', err);
       setStatus('error');
-      onError && onError(err);
+      onErrorRef.current && onErrorRef.current(err);
     }
-  }, [ensureContext, onEnded, onError, status]);
+  }, [ensureContext]);
 
   // ── Play / Pause / Stop ──────────────────────────────────────────────
   const play = useCallback(async () => {
@@ -232,8 +273,20 @@ export function useModPlayer({ item, onEnded, onError }) {
   useEffect(() => {
     if (item) {
       loadItem(item);
+    } else {
+      if (positionTimerRef.current) clearInterval(positionTimerRef.current);
+      positionTimerRef.current = null;
+      endedRef.current = false;
+      durationRef.current = 0;
+      setStatus('idle');
+      setCurrentTime(0);
+      setDuration(0);
+      if (workletNodeRef.current) {
+        try { workletNodeRef.current.disconnect(); } catch {}
+        workletNodeRef.current = null;
+      }
     }
-  }, [item]);
+  }, [item?.id, loadItem]);
 
   // ── Cleanup on unmount ───────────────────────────────────────────────
   useEffect(() => {

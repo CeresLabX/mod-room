@@ -706,13 +706,27 @@ label {
 .queue-play {
   font-family: var(--font-main);
   font-size: var(--font-size-xs);
-  background: transparent;
-  border: none;
-  color: var(--highlight);
+  background: var(--btn-bg);
+  border: 1px solid var(--accent);
+  color: var(--accent);
   cursor: pointer;
-  padding: 2px 4px;
+  padding: 4px 6px;
+  min-width: 52px;
+  text-align: center;
+  text-shadow: var(--glow-accent);
 }
-.queue-play:hover { color: var(--success); text-shadow: 0 0 8px var(--success); }
+.queue-play:hover {
+  background: var(--btn-hover);
+  color: var(--primary);
+  border-color: var(--primary);
+  text-shadow: var(--glow-primary);
+}
+.queue-play.active {
+  color: var(--highlight);
+  border-color: var(--highlight);
+  box-shadow: var(--glow-highlight);
+  text-shadow: var(--glow-highlight);
+}
 
 /* ─── RIGHT COLUMN ──────────────────────────────────────────────────────── */
 .right-col {

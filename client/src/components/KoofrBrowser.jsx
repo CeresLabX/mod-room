@@ -28,6 +28,7 @@ export default function KoofrBrowser({ onAdd }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
+  const [addedPath, setAddedPath] = useState('');
 
   useEffect(() => {
     fetchFiles(path);
@@ -55,6 +56,7 @@ export default function KoofrBrowser({ onAdd }) {
       setPath(item.path);
     } else {
       setSelectedFile(item);
+      setAddedPath('');
     }
   }
 
@@ -81,6 +83,8 @@ export default function KoofrBrowser({ onAdd }) {
       format: ext,
       duration: 0,
     });
+    setAddedPath(selectedFile.path);
+    setSelectedFile(null);
   }
 
   const trackerFiles = files.filter(f => !f.isDirectory && MOD_FORMATS.has(f.name.split('.').pop().toUpperCase()));
@@ -167,7 +171,7 @@ export default function KoofrBrowser({ onAdd }) {
       {selectedFile && (
         <div style={{ marginTop: 12, display: 'flex', gap: 8, alignItems: 'center' }}>
           <button className="btn btn-accent" onClick={handleAdd}>
-            [ADD: {selectedFile.name}]
+            [ADD TO PLAYLIST: {selectedFile.name}]
           </button>
           <button className="btn btn-small" onClick={() => setSelectedFile(null)}>
             [CANCEL]
@@ -175,8 +179,14 @@ export default function KoofrBrowser({ onAdd }) {
         </div>
       )}
 
+      {addedPath && (
+        <div style={{ marginTop: 8, color: 'var(--accent)', fontSize: 'var(--font-size-xs)' }}>
+          ✓ Added to playlist. Pick another file to keep building the queue.
+        </div>
+      )}
+
       <div className="format-note" style={{ marginTop: 12 }}>
-        <strong>Tip:</strong> MOD/XM/S3M/IT tracker files play directly from Koofr via the built-in player.
+        <strong>Tip:</strong> MOD/XM/S3M/IT tracker files play directly from Koofr via the built-in player. The Koofr picker stays open so you can add multiple songs.
       </div>
     </div>
   );

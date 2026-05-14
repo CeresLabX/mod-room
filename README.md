@@ -111,6 +111,15 @@ Key fixes:
 
 Verified against Koofr file `2little.mod` on production: the file loads, appears as now playing, timer advances, and the service health remains OK.
 
+
+### 2026-05 playlist/timing fix
+
+MOD Room queue behavior was updated to act like a normal playlist:
+- Skip/auto-next now advances the current item pointer instead of deleting the played song.
+- Koofr picker stays open after adding a file so multiple songs can be queued quickly.
+- Per-song play buttons show `[PLAY]`, `[LOAD]`, or `[NOW]` with clearer active styling.
+- MOD duration is estimated by simulating the Protracker engine to end-of-song, so the progress bar sizes per track instead of using a static row-count estimate.
+
 ---
 
 ## Known Limitations

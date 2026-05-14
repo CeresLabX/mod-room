@@ -221,7 +221,7 @@ export default function AddMediaModal({ onAdd, onClose }) {
         )}
 
         {tab === 'koofr' && (
-          <KoofrBrowser onAdd={onAdd} />
+          <KoofrBrowser onAdd={(item) => onAdd(item, { keepOpen: true })} />
         )}
 
         <div className="format-note">
