@@ -74,15 +74,13 @@ export default function QueuePanel({ queue, currentItemId, playbackStatus, isHos
                   {isCurrent ? (playbackStatus === 'playing' ? '[NOW]' : '[LOAD]') : '[PLAY]'}
                 </button>
 
-                {(isHost || item.addedBy === nickname) && (
-                  <button
-                    className="queue-remove"
-                    onClick={() => onRemove(item.id)}
-                    title="Remove from queue"
-                  >
-                    [X]
-                  </button>
-                )}
+                <button
+                  className="queue-remove"
+                  onClick={() => onRemove(item.id)}
+                  title="Remove from queue"
+                >
+                  [X]
+                </button>
               </div>
             );
           })

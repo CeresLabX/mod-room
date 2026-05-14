@@ -185,21 +185,15 @@ export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onP
               {!isMod && (
                 <button className="btn btn-small" onClick={handleSkipBack} disabled={noItem || !duration}>[⏪ -10s]</button>
               )}
-              {isHost ? (
-                <>
-                  {localStatus === 'playing' || status === 'playing' ? (
-                    <button className="btn btn-small" onClick={handlePlayPause}>[⏸ PAUSE]</button>
-                  ) : (
-                    <button className="btn btn-small" onClick={handlePlayPause} disabled={noItem}>[▶ PLAY]</button>
-                  )}
-                  <button className="btn btn-small" onClick={onNext} disabled={queue.length <= 1}>[⏭ NEXT]</button>
-                  <button className="btn btn-small" onClick={() => { stop(); onPause(); setLocalStatus('idle'); }}>[⏹ STOP]</button>
-                </>
-              ) : (
-                <span className="text-dim text-xs">
-                  {playback.status === 'playing' ? '▶ SYNCED TO ROOM' : playback.status === 'paused' ? '⏸ PAUSED BY HOST' : '⏹ IDLE'}
-                </span>
-              )}
+              <>
+                {localStatus === 'playing' || status === 'playing' ? (
+                  <button className="btn btn-small" onClick={handlePlayPause}>[⏸ PAUSE]</button>
+                ) : (
+                  <button className="btn btn-small" onClick={handlePlayPause} disabled={noItem}>[▶ PLAY]</button>
+                )}
+                <button className="btn btn-small" onClick={onNext} disabled={queue.length <= 1}>[⏭ NEXT]</button>
+                <button className="btn btn-small" onClick={() => { stop(); onPause(); setLocalStatus('idle'); }}>[⏹ STOP]</button>
+              </>
               {!isMod && (
                 <button className="btn btn-small" onClick={handleSkipForward} disabled={noItem || !duration}>[⏩ +10s]</button>
               )}

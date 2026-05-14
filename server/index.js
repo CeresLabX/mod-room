@@ -173,8 +173,8 @@ io.on('connection', (socket) => {
       if (!currentRoom || !currentNickname) return;
       const db = getDb();
       const roomRes = await db.query('SELECT * FROM rooms WHERE id = $1', [currentRoom]);
-      if (!roomRes.rows.length || roomRes.rows[0].host_nickname !== currentNickname) {
-        socket.emit('error', { message: 'Only the host can control playback' });
+      if (!roomRes.rows.length) {
+        socket.emit('error', { message: 'Room not found' });
         return;
       }
       const updateCols = ['playback_status = $1', 'playback_updated_at = NOW()'];
@@ -209,8 +209,8 @@ io.on('connection', (socket) => {
     if (!currentRoom || !currentNickname) return;
     const db = getDb();
     const roomRes = await db.query('SELECT * FROM rooms WHERE id = $1', [currentRoom]);
-    if (!roomRes.rows.length || roomRes.rows[0].host_nickname !== currentNickname) {
-      socket.emit('error', { message: 'Only the host can control playback' });
+    if (!roomRes.rows.length) {
+      socket.emit('error', { message: 'Room not found' });
       return;
     }
     await db.query(
@@ -234,8 +234,8 @@ io.on('connection', (socket) => {
     if (!currentRoom || !currentNickname) return;
     const db = getDb();
     const roomRes = await db.query('SELECT * FROM rooms WHERE id = $1', [currentRoom]);
-    if (!roomRes.rows.length || roomRes.rows[0].host_nickname !== currentNickname) {
-      socket.emit('error', { message: 'Only the host can skip' });
+    if (!roomRes.rows.length) {
+      socket.emit('error', { message: 'Room not found' });
       return;
     }
 
@@ -339,12 +339,6 @@ io.on('connection', (socket) => {
     const item = itemRes.rows[0];
 
     const roomRes = await db.query('SELECT * FROM rooms WHERE id = $1', [currentRoom]);
-    const isHost = roomRes.rows[0].host_nickname === currentNickname;
-
-    if (item.added_by !== currentNickname && !isHost) {
-      socket.emit('error', { message: 'You can only remove your own items' });
-      return;
-    }
 
     await db.query('DELETE FROM queue_items WHERE id = $1', [itemId]);
     await db.query(
