@@ -127,15 +127,21 @@ export function useAudioPlayer({ item, onEnded, onError }) {
           console.warn('[player] audio resume failed:', err.message);
         });
       }
-      await playerRef.current.play().catch((err) => {
-        console.warn('[player] play blocked:', err.message);
+      // Note: play() on an errored audio element throws a synchronous DOMException,
+      // not a rejected promise — so we need a full try/catch wrapper, not just .catch()
+      try {
+        await playerRef.current.play();
+      } catch (playErr) {
+        console.warn('[player] play failed:', playErr.message || playErr);
         pendingPlayRef.current = true;
         setStatus('paused');
         return;
-      });
+      }
       setStatus('playing');
     } catch (e) {
-      if (e) console.error('[player] play failed:', e.message || e);
+      if (e) console.error('[player] play threw:', e.message || e);
+      pendingPlayRef.current = true;
+      setStatus('paused');
     }
   }, []);
 

@@ -289,6 +289,7 @@ label {
 .badge-audio { color: var(--primary); }
 .badge-video { color: var(--accent); }
 .badge-youtube { color: #FF0000; }
+.badge-default { color: var(--dim); }
 .badge-midi { color: var(--highlight); }
 
 /* ─── LANDING ─────────────────────────────────────────────────────────────── */
