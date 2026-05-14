@@ -178,11 +178,12 @@ io.on('connection', (socket) => {
         return;
       }
       const updateCols = ['playback_status = $1', 'playback_updated_at = NOW()'];
-      const updateVals = ['playing', currentRoom];
+      const updateVals = ['playing'];
       if (itemId) {
-        updateCols.push(`current_item_id = $${updateVals.length + 1}`);
         updateVals.push(itemId);
+        updateCols.push(`current_item_id = $${updateVals.length}`);
       }
+      updateVals.push(currentRoom);
       await db.query(
         `UPDATE rooms SET ${updateCols.join(', ')} WHERE id = $${updateVals.length}`,
         updateVals
