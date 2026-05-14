@@ -25,7 +25,7 @@ export default function RoomLanding({ theme, applyTheme }) {
       const res = await axios.post('/api/rooms', { nickname: nick });
       localStorage.setItem('modroom-nick', nick);
       localStorage.setItem('modroom-host', '1');
-      navigate(`/room/${res.data.roomId}`);
+      navigate(`/room/code/${res.data.roomCode}`);
     } catch (e) {
       setError(e.response?.data?.error || 'Failed to create room');
       setLoading(false);
