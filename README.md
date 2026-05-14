@@ -151,6 +151,39 @@ Verification:
 - Production health check returned `200 OK`.
 - Browser smoke test on production created a room, added two Koofr `.mod` files, confirmed the modal stayed open, confirmed two queue rows, saw `[NOW]` on the active item, and verified duration displayed `2:49` instead of the old static `0:18`.
 
+### 2026-05 playlist sync fix
+
+Symptoms fixed:
+- Inconsistent playback when moving through playlist songs — sometimes worked, sometimes needed a page refresh.
+- Removing a song from the playlist sometimes required a refresh because the X button appeared to do nothing.
+- Clicking the per-song `[PLAY]` button in the queue sometimes didn't start playback until the page was refreshed.
+
+Root causes:
+- `client/src/hooks/useSocket.js` registered Socket.IO event handlers inside a `useEffect([])` — the handlers were captured from the first render and never updated. `handleQueueUpdated` always saw `currentItem = null` from its closure, which broke the "current item removed" fallback logic.
+- `client/src/components/PlayerPanel.jsx` sync effect did not re-run when the local player `status` changed (e.g., from `'loading'` → `'paused'` after `loadItem` finished). When switching tracks while the previous track was playing, the new track loaded but never auto-started because the effect only watched `playback.*` and `item?.id`.
+- `client/src/hooks/useAudioPlayer.js` reloaded the audio element on every `queue-updated` event because its load effect depended on `item` (object identity) instead of `item?.id`. Queue updates create new object references for the same tracks, causing unnecessary reloads.
+- `client/src/components/RoomView.jsx` `findCurrentItem` fell back to `q[0]` when an `itemId` was not found in the queue. A stale queue could cause the wrong track to load.
+
+Fixes:
+- `useSocket.js` now stores handlers in a `handlersRef` and updates it every render, so socket callbacks always invoke the latest handler functions.
+- `PlayerPanel.jsx` sync effect dependency array now includes `status`, ensuring `play()` is called when `loadItem` finishes and the server wants the track playing.
+- `useAudioPlayer.js` load effect now keys on `item?.id` with an `eslint-disable` for exhaustive-deps, preventing reloads when queue updates swap object references.
+- `RoomView.jsx` `findCurrentItem` no longer falls back to `q[0]`; it returns `null` when the requested item is not in the queue.
+
+Verification:
+- Built production assets with `npm run build`.
+- Syntax checked `server/index.js` and `server/routes/koofr.js`.
+- Pushed Git commit `3044911 fix: socket handler staleness, playlist sync, and audio reload bugs` to GitHub `main`.
+- Railway auto-deployed and production served new hashed assets (`index-DlNQTGrz.js`).
+- Production health check returned `200 OK`.
+- Browser smoke test on production verified:
+  - Clicked `[PLAY]` on item 2 → item 2 showed `[NOW]`.
+  - Clicked `[PLAY]` on item 1 → item 1 showed `[NOW]`.
+  - Removed non-current item → queue dropped from 2 to 1.
+  - Removed current/last item → queue dropped from 1 to 0.
+  - Clicked `[NEXT]` → correctly advanced to the next item.
+  - Zero console/page errors.
+
 ---
 
 ## Known Limitations
