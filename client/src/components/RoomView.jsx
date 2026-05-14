@@ -60,7 +60,7 @@ export default function RoomView({ theme, applyTheme }) {
       ...playbackRef.current,
       status: data.status,
       itemId: nextItemId,
-      timestamp: data.timestamp || playbackRef.current.timestamp,
+      timestamp: data.timestamp !== undefined ? data.timestamp : playbackRef.current.timestamp,
     };
     setPlayback({ ...playbackRef.current });
     if (nextItemId) {

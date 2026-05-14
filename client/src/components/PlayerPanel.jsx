@@ -61,11 +61,24 @@ export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onP
     } else if (playback.status === 'paused' && status === 'playing') {
       pause();
     }
-    if (playback.timestamp && Math.abs(currentTime - playback.timestamp) > 3) {
+    if (playback.timestamp !== undefined && Math.abs(currentTime - playback.timestamp) > 3) {
       syncTo(playback.timestamp);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item?.id, playback.itemId, playback.status, playback.timestamp, status]);
+
+  // Unlock audio on any user click — browser autoplay policy requires a gesture
+  useEffect(() => {
+    if (!autoplayBlocked) return;
+    const unlockAudio = () => {
+      clearAutoplayBlocked();
+      if (playback.status === 'playing') {
+        play();
+      }
+    };
+    document.addEventListener('click', unlockAudio);
+    return () => document.removeEventListener('click', unlockAudio);
+  }, [autoplayBlocked, playback.status, play, clearAutoplayBlocked]);
 
   const handleProgressClick = (e) => {
     if (!duration) return;
@@ -177,9 +190,14 @@ export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onP
 
         <div className="player-controls">
           {autoplayBlocked ? (
-            <button className="btn btn-small" style={{ background: '#c0392b', color: '#fff', fontWeight: 'bold' }} onClick={() => { clearAutoplayBlocked(); play(); }}>
-              🔇 CLICK TO ENABLE AUDIO
-            </button>
+            <div style={{ textAlign: 'center', padding: '4px 0' }}>
+              <button className="btn" style={{ background: '#c0392b', color: '#fff', fontWeight: 'bold', border: '2px solid #fff' }} onClick={() => { clearAutoplayBlocked(); play(); }}>
+                🔇 CLICK ANYWHERE TO START AUDIO
+              </button>
+              <div className="text-dim text-xs" style={{ marginTop: 6 }}>
+                Your browser blocks audio until you interact with the page
+              </div>
+            </div>
           ) : (
             <>
               {!isMod && (
