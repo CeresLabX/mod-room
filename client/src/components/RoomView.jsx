@@ -134,7 +134,8 @@ export default function RoomView({ theme, applyTheme }) {
 
   const onSeekFromServer = useCallback((data) => {
     playbackRef.current.timestamp = data.timestamp;
-    // Player component will handle seek
+    setPlayback(prev => ({ ...prev, timestamp: data.timestamp }));
+    // Player component will handle seek via syncTo in its sync effect
   }, []);
 
   const handleError = useCallback((data) => {

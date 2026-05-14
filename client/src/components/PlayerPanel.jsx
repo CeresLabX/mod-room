@@ -47,7 +47,7 @@ export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onP
   // Pick the active player based on format
   const isMod = isModFormat(item);
   const active = isMod ? modPlayer : htmlPlayer;
-  const { status, currentTime, duration, volume, analyserNode, analyserRef, animFrameRef, playerRef, play, pause, stop, seek, changeVolume, syncTo } = active;
+  const { status, currentTime, duration, volume, analyserNode, analyserRef, animFrameRef, playerRef, play, pause, stop, seek, changeVolume, syncTo, autoplayBlocked, clearAutoplayBlocked } = active;
   const progressPct = duration ? Math.min(100, Math.max(0, (currentTime / duration) * 100)) : 0;
 
   useEffect(() => {
@@ -72,6 +72,20 @@ export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onP
     const rect = e.currentTarget.getBoundingClientRect();
     const ratio = (e.clientX - rect.left) / rect.width;
     const time = ratio * duration;
+    seek(time);
+    onSeek(time);
+  };
+
+  const handleSkipBack = () => {
+    if (!duration) return;
+    const time = Math.max(0, currentTime - 10);
+    seek(time);
+    onSeek(time);
+  };
+
+  const handleSkipForward = () => {
+    if (!duration) return;
+    const time = Math.min(duration, currentTime + 10);
     seek(time);
     onSeek(time);
   };
@@ -155,22 +169,41 @@ export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onP
             <span>{formatTime(duration)}</span>
           </div>
         </div>
+        {isMod && (
+          <div className="text-dim text-xs" style={{ textAlign: 'center', marginTop: 4, marginBottom: 4 }}>
+            ⓘ Seeking not supported for tracker modules
+          </div>
+        )}
 
         <div className="player-controls">
-          {isHost ? (
-            <>
-              {localStatus === 'playing' || status === 'playing' ? (
-                <button className="btn btn-small" onClick={handlePlayPause}>[⏸ PAUSE]</button>
-              ) : (
-                <button className="btn btn-small" onClick={handlePlayPause} disabled={noItem}>[▶ PLAY]</button>
-              )}
-              <button className="btn btn-small" onClick={onNext} disabled={queue.length <= 1}>[⏭ NEXT]</button>
-              <button className="btn btn-small" onClick={() => { stop(); onPause(); setLocalStatus('idle'); }}>[⏹ STOP]</button>
-            </>
+          {autoplayBlocked ? (
+            <button className="btn btn-small" style={{ background: '#c0392b', color: '#fff', fontWeight: 'bold' }} onClick={() => { clearAutoplayBlocked(); play(); }}>
+              🔇 CLICK TO ENABLE AUDIO
+            </button>
           ) : (
-            <span className="text-dim text-xs">
-              {playback.status === 'playing' ? '▶ SYNCED TO ROOM' : playback.status === 'paused' ? '⏸ PAUSED BY HOST' : '⏹ IDLE'}
-            </span>
+            <>
+              {!isMod && (
+                <button className="btn btn-small" onClick={handleSkipBack} disabled={noItem || !duration}>[⏪ -10s]</button>
+              )}
+              {isHost ? (
+                <>
+                  {localStatus === 'playing' || status === 'playing' ? (
+                    <button className="btn btn-small" onClick={handlePlayPause}>[⏸ PAUSE]</button>
+                  ) : (
+                    <button className="btn btn-small" onClick={handlePlayPause} disabled={noItem}>[▶ PLAY]</button>
+                  )}
+                  <button className="btn btn-small" onClick={onNext} disabled={queue.length <= 1}>[⏭ NEXT]</button>
+                  <button className="btn btn-small" onClick={() => { stop(); onPause(); setLocalStatus('idle'); }}>[⏹ STOP]</button>
+                </>
+              ) : (
+                <span className="text-dim text-xs">
+                  {playback.status === 'playing' ? '▶ SYNCED TO ROOM' : playback.status === 'paused' ? '⏸ PAUSED BY HOST' : '⏹ IDLE'}
+                </span>
+              )}
+              {!isMod && (
+                <button className="btn btn-small" onClick={handleSkipForward} disabled={noItem || !duration}>[⏩ +10s]</button>
+              )}
+            </>
           )}
         </div>
 

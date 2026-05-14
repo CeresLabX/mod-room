@@ -6,6 +6,7 @@ export function useAudioPlayer({ item, onEnded, onError }) {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(0.8);
+  const [autoplayBlocked, setAutoplayBlocked] = useState(false);
   const [analyserNode, setAnalyserNode] = useState(null);
   const playerRef = useRef(null);
   const audioContextRef = useRef(null);
@@ -134,13 +135,26 @@ export function useAudioPlayer({ item, onEnded, onError }) {
       try {
         await playerRef.current.play();
       } catch (playErr) {
+        if (playErr.name === 'NotAllowedError') {
+          console.warn('[player] Autoplay blocked — user interaction required');
+          setAutoplayBlocked(true);
+          setStatus('paused');
+          return;
+        }
         console.warn('[player] play failed:', playErr.message || playErr);
         pendingPlayRef.current = true;
         setStatus('paused');
         return;
       }
+      setAutoplayBlocked(false);
       setStatus('playing');
     } catch (e) {
+      if (e && e.name === 'NotAllowedError') {
+        console.warn('[player] Autoplay blocked — user interaction required');
+        setAutoplayBlocked(true);
+        setStatus('paused');
+        return;
+      }
       if (e) console.error('[player] play threw:', e.message || e);
       pendingPlayRef.current = true;
       setStatus('paused');
@@ -172,6 +186,10 @@ export function useAudioPlayer({ item, onEnded, onError }) {
     if (playerRef.current) playerRef.current.volume = v;
   }, []);
 
+  const clearAutoplayBlocked = useCallback(() => {
+    setAutoplayBlocked(false);
+  }, []);
+
   // Sync position from server
   const syncTo = useCallback((timestamp) => {
     if (!playerRef.current || !duration) return;
@@ -195,6 +213,8 @@ export function useAudioPlayer({ item, onEnded, onError }) {
     analyserRef,
     animFrameRef,
     playerRef,
+    autoplayBlocked,
+    clearAutoplayBlocked,
     play,
     pause,
     stop,

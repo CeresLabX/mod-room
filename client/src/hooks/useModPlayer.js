@@ -57,6 +57,7 @@ export function useModPlayer({ item, onEnded, onError }) {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolumeState] = useState(0.8);
+  const [autoplayBlocked, setAutoplayBlocked] = useState(false);
   const [analyserNode, setAnalyserNode] = useState(null);
 
   const audioContextRef = useRef(null);
@@ -230,8 +231,15 @@ export function useModPlayer({ item, onEnded, onError }) {
         console.warn('[modplayer] AudioContext is closed — cannot start playback');
         return;
       }
+      setAutoplayBlocked(false);
       setStatus('playing');
     } catch (err) {
+      if (err.name === 'NotAllowedError') {
+        console.warn('[modplayer] Autoplay blocked — user interaction required');
+        setAutoplayBlocked(true);
+        setStatus('paused');
+        return;
+      }
       console.error('[modplayer] play failed:', err.message || err);
       setStatus('error');
     }
@@ -267,6 +275,10 @@ export function useModPlayer({ item, onEnded, onError }) {
     if (workletNodeRef.current) {
       workletNodeRef.current.volume = v;
     }
+  }, []);
+
+  const clearAutoplayBlocked = useCallback(() => {
+    setAutoplayBlocked(false);
   }, []);
 
   // ── Load new item ────────────────────────────────────────────────────
@@ -310,6 +322,8 @@ export function useModPlayer({ item, onEnded, onError }) {
     analyserRef,
     playerRef: workletNodeRef,
     isModPlayer: true,
+    autoplayBlocked,
+    clearAutoplayBlocked,
     play,
     pause,
     stop,
