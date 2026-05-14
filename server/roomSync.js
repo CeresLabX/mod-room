@@ -13,6 +13,7 @@ function getOrCreateActiveRoom(roomId) {
     activeRooms.set(roomId, {
       playbackState: null,
       connectedUsers: new Set(),
+      socketNicknames: new Map(),
       heartbeatInterval: null,
     });
   }

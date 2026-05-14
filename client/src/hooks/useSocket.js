@@ -17,6 +17,9 @@ export function useSocket(handlers) {
     });
     socketRef.current = socket;
 
+    socket.on('connect', () => handlersRef.current.onConnect?.({ socket, socketId: socket.id }));
+    socket.on('reconnect', () => handlersRef.current.onConnect?.({ socket, socketId: socket.id, reconnected: true }));
+
     socket.on('room-state', (data) => handlersRef.current.onRoomState?.(data));
     socket.on('playback-update', (data) => handlersRef.current.onPlaybackUpdate?.(data));
     socket.on('queue-updated', (data) => handlersRef.current.onQueueUpdated?.(data));

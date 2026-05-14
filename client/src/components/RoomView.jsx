@@ -169,7 +169,13 @@ export default function RoomView({ theme, applyTheme }) {
     setTimeout(() => setError(''), 5000);
   }, []);
 
+  const joinRoom = useCallback((socketLike) => {
+    if (!nickname) { navigate('/'); return; }
+    socketLike.emit('join-room', { roomId, nickname });
+  }, [roomId, nickname, navigate]);
+
   const { emit } = useSocket({
+    onConnect: ({ socket }) => joinRoom(socket),
     onRoomState: handleRoomState,
     onPlaybackUpdate: handlePlaybackUpdate,
     onQueueUpdated: handleQueueUpdated,
@@ -181,11 +187,11 @@ export default function RoomView({ theme, applyTheme }) {
     onError: handleError,
   });
 
-  // Join room on mount
+  // Validate local identity on mount; actual room join happens on every
+  // socket connect/reconnect so a refresh is treated like a clean rejoin.
   useEffect(() => {
-    if (!nickname) { navigate('/'); return; }
-    emit('join-room', { roomId, nickname });
-  }, [roomId]);
+    if (!nickname) navigate('/');
+  }, [nickname, navigate]);
 
   // Keep URL in sync with room code (so shared URLs use code, not UUID)
   useEffect(() => {

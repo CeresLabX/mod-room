@@ -105,7 +105,10 @@ io.on('connection', (socket) => {
     if (currentRoom) {
       socket.leave(currentRoom);
       const prevRoom = roomSync.getActiveRooms().get(currentRoom);
-      if (prevRoom) prevRoom.connectedUsers.delete(socket.id);
+      if (prevRoom) {
+        prevRoom.connectedUsers.delete(socket.id);
+        prevRoom.socketNicknames?.delete(socket.id);
+      }
     }
 
     currentRoom = canonicalRoomId;
@@ -116,6 +119,8 @@ io.on('connection', (socket) => {
     // Register in in-memory sync service
     const roomSyncState = roomSync.initPlaybackStateFromDb(canonicalRoomId, room);
     roomSyncState.connectedUsers.add(socket.id);
+    if (!roomSyncState.socketNicknames) roomSyncState.socketNicknames = new Map();
+    roomSyncState.socketNicknames.set(socket.id, safeNickname);
     if (!roomSyncState.heartbeatInterval) {
       roomSync.startRoomHeartbeat(io, canonicalRoomId);
     }
@@ -477,18 +482,27 @@ io.on('connection', (socket) => {
     console.log(`[socket] disconnected: ${socket.id}`);
     if (currentRoom && currentNickname) {
       const db = getDb();
-      await db.query(
-        'DELETE FROM room_participants WHERE room_id = $1 AND nickname = $2',
-        [currentRoom, currentNickname]
-      );
       const roomSyncState = roomSync.getActiveRooms().get(currentRoom);
       if (roomSyncState) {
         roomSyncState.connectedUsers.delete(socket.id);
+        if (!roomSyncState.socketNicknames) roomSyncState.socketNicknames = new Map();
+        roomSyncState.socketNicknames.delete(socket.id);
         const count = roomSyncState.connectedUsers.size;
-        io.to(currentRoom).emit('user-left', {
-          nickname: currentNickname,
-          clientsCount: count,
-        });
+        const nicknameStillConnected = Array.from(roomSyncState.socketNicknames.values()).includes(currentNickname);
+
+        // Browser refresh creates a new socket before/around the old socket's disconnect.
+        // Don't remove the participant or broadcast a leave if the same nickname already rejoined.
+        if (!nicknameStillConnected) {
+          await db.query(
+            'DELETE FROM room_participants WHERE room_id = $1 AND nickname = $2',
+            [currentRoom, currentNickname]
+          );
+          io.to(currentRoom).emit('user-left', {
+            nickname: currentNickname,
+            clientsCount: count,
+          });
+        }
+
         if (count === 0) {
           roomSync.stopRoomHeartbeat(currentRoom);
           roomSync.deleteActiveRoom(currentRoom);
