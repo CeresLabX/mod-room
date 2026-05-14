@@ -43,10 +43,16 @@ export function useModPlayer({ item, onEnded, onError }) {
   const currentItemRef = useRef(null);
   const volumeRef = useRef(0.8);
   const positionTimerRef = useRef(null);
+  const pendingPlayRef = useRef(false);
+  const statusRef = useRef('idle');
+
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
 
   // ── Init AudioContext + worklet (once) ────────────────────────────────
   const ensureContext = useCallback(async () => {
-    if (audioContextRef.current) return audioContextRef.current;
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') return audioContextRef.current;
 
     const ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 44100 });
     audioContextRef.current = ctx;
@@ -78,20 +84,29 @@ export function useModPlayer({ item, onEnded, onError }) {
         workletNodeRef.current = null;
       }
 
-      // Fetch the MOD file
-      const response = await fetch(newItem.url);
-      if (!response.ok) throw new Error(`Failed to fetch MOD: ${response.status}`);
-      const arrayBuffer = await response.arrayBuffer();
+      // Fetch the MOD file. Keep this bounded so a stuck Koofr/Railway stream
+      // leaves the player in an error state instead of hanging indefinitely.
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30000);
+      let response;
+      let arrayBuffer;
+      try {
+        response = await fetch(newItem.url, { signal: controller.signal });
+        if (!response.ok) throw new Error(`Failed to fetch MOD: ${response.status}`);
+        arrayBuffer = await response.arrayBuffer();
+      } finally {
+        clearTimeout(timeout);
+      }
       const uint8 = new Uint8Array(arrayBuffer);
 
-      // Get sample rate from context
       const ctx = await ensureContext();
-      if (ctx.state === 'suspended') await ctx.resume();
 
-      // Create the worklet node
+      // Create the worklet node. modplayer does not expose play/pause commands;
+      // it only starts the Protracker engine from the constructor when autoplay
+      // is true, so pause/play is handled by suspending/resuming the context.
       const ext = (newItem.filename || newItem.url).split('.').pop().toLowerCase();
       const workletNode = loadWorkletFromBuffer(ext, uint8, ctx, {
-        options: { autoplay: false, repeat: true },
+        options: { autoplay: true, repeat: true },
       });
 
       // Reconnect to our analyser chain
@@ -118,13 +133,20 @@ export function useModPlayer({ item, onEnded, onError }) {
       if (positionTimerRef.current) clearInterval(positionTimerRef.current);
       let elapsed = 0;
       positionTimerRef.current = setInterval(() => {
-        if (status === 'playing') {
+        if (statusRef.current === 'playing') {
           elapsed += 0.25;
           setCurrentTime(elapsed);
         }
       }, 250);
 
-      setStatus('paused');
+      if (pendingPlayRef.current || newItem.autoPlay) {
+        pendingPlayRef.current = false;
+        if (ctx.state === 'suspended') await ctx.resume();
+        setStatus('playing');
+      } else {
+        if (ctx.state === 'running') await ctx.suspend().catch(() => {});
+        setStatus('paused');
+      }
 
       // Handle worklet errors
       workletNode.port.onmessage = (e) => {
@@ -149,22 +171,24 @@ export function useModPlayer({ item, onEnded, onError }) {
   const play = useCallback(async () => {
     const node = workletNodeRef.current;
     const ctx = audioContextRef.current;
-    if (!node || !ctx) return;
+    if (!node || !ctx) {
+      pendingPlayRef.current = true;
+      return;
+    }
 
     try {
-      // Only call resume() if the context is actually suspended — not closed
+      // modplayer AudioWorklet playback is controlled by the AudioContext.
       if (ctx.state === 'suspended') {
         await ctx.resume().catch(err => {
           console.warn('[modplayer] AudioContext.resume() failed:', err.message);
           throw err;
         });
       }
-      // Guard: do not call start() if context is closed
       if (ctx.state === 'closed') {
+        pendingPlayRef.current = true;
         console.warn('[modplayer] AudioContext is closed — cannot start playback');
         return;
       }
-      node.start?.();
       setStatus('playing');
     } catch (err) {
       console.error('[modplayer] play failed:', err.message || err);
@@ -173,17 +197,20 @@ export function useModPlayer({ item, onEnded, onError }) {
   }, []);
 
   const pause = useCallback(() => {
-    const node = workletNodeRef.current;
-    if (!node) return;
-    try { node.pause?.(); } catch {}
-    try { node.stop?.(); } catch {}
+    const ctx = audioContextRef.current;
+    pendingPlayRef.current = false;
+    if (ctx && ctx.state === 'running') {
+      ctx.suspend().catch(() => {});
+    }
     setStatus('paused');
   }, []);
 
   const stop = useCallback(() => {
-    const node = workletNodeRef.current;
-    if (!node) return;
-    try { node.stop?.(); } catch {}
+    const ctx = audioContextRef.current;
+    pendingPlayRef.current = false;
+    if (ctx && ctx.state === 'running') {
+      ctx.suspend().catch(() => {});
+    }
     setStatus('idle');
     setCurrentTime(0);
   }, []);

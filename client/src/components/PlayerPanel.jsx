@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAudioPlayer } from '../hooks/useAudioPlayer.js';
 import { useModPlayer } from '../hooks/useModPlayer.js';
 import Visualizer from './Visualizer.jsx';
@@ -22,7 +22,6 @@ function formatTime(s) {
 export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onPause, onSeek, onNext, emit }) {
   const [showVideo, setShowVideo] = useState(false);
   const [localStatus, setLocalStatus] = useState('idle');
-  const itemRef = useRef(item);
 
   const handleEnded = () => {
     emit('next', {});
@@ -48,7 +47,7 @@ export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onP
   // Pick the active player based on format
   const isMod = isModFormat(item);
   const active = isMod ? modPlayer : htmlPlayer;
-  const { status, currentTime, duration, volume, analyserNode, analyserRef, animFrameRef, playerRef, play, pause, stop, seek, changeVolume, syncTo, loadItem } = active;
+  const { status, currentTime, duration, volume, analyserNode, analyserRef, animFrameRef, playerRef, play, pause, stop, seek, changeVolume, syncTo } = active;
 
   // Keep player in sync with server state
   useEffect(() => {
@@ -61,15 +60,7 @@ export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onP
       syncTo(playback.timestamp);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playback.itemId, playback.status, playback.timestamp]);
-
-  // Load new item when it changes
-  useEffect(() => {
-    if (item && item !== itemRef.current) {
-      itemRef.current = item;
-      loadItem(item);
-    }
-  }, [item?.id]);
+  }, [item?.id, playback.itemId, playback.status, playback.timestamp]);
 
   const handleProgressClick = (e) => {
     if (!duration) return;

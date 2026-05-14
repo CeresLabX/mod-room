@@ -55,32 +55,49 @@ export default function RoomView({ theme, applyTheme }) {
   }, [nickname, findCurrentItem]);
 
   const handlePlaybackUpdate = useCallback((data) => {
+    const nextItemId = data.itemId || playbackRef.current.itemId;
     playbackRef.current = {
       ...playbackRef.current,
       status: data.status,
-      itemId: data.itemId || playbackRef.current.itemId,
+      itemId: nextItemId,
       timestamp: data.timestamp || playbackRef.current.timestamp,
     };
     setPlayback({ ...playbackRef.current });
-    if (data.itemId) {
-      const item = findCurrentItem(queueRef.current, data.itemId);
+    if (nextItemId) {
+      const item = findCurrentItem(queueRef.current, nextItemId);
       setCurrentItem(item);
     }
   }, [findCurrentItem]);
 
   const handleQueueUpdated = useCallback((data) => {
-    setQueue(data.queue);
-    queueRef.current = data.queue;
+    const nextQueue = data.queue || [];
+    setQueue(nextQueue);
+    queueRef.current = nextQueue;
+
+    const playbackItemId = playbackRef.current.itemId;
+    if (playbackItemId) {
+      const updatedCurrent = nextQueue.find(i => i.id === playbackItemId);
+      if (updatedCurrent) {
+        setCurrentItem(updatedCurrent);
+        return;
+      }
+    }
+
     if (currentItem) {
-      const updated = data.queue.find(i => i.id === currentItem.id);
+      const updated = nextQueue.find(i => i.id === currentItem.id);
       if (!updated) {
         // current item was removed — advance to next
-        const next = data.queue[0] || null;
+        const next = nextQueue[0] || null;
         setCurrentItem(next);
         if (next) {
           playbackRef.current.itemId = next.id;
         }
       }
+    } else if (nextQueue.length && playbackRef.current.status === 'playing') {
+      // Server can emit playback-update before queue-updated after the first add.
+      // Once the queue arrives, hydrate the current item so the player can load it.
+      setCurrentItem(nextQueue[0]);
+      playbackRef.current.itemId = nextQueue[0].id;
     }
   }, [currentItem]);
 

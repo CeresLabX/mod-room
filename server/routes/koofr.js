@@ -5,6 +5,8 @@
  */
 
 const express = require('express');
+const { Readable } = require('stream');
+const { pipeline } = require('stream/promises');
 const router = express.Router();
 
 const {
@@ -134,10 +136,16 @@ router.get('/file', async (req, res) => {
 
   const koofrUrl = `${baseUrl}${itemPath}`;
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30000);
+
+  res.on('close', () => controller.abort());
+
   try {
     const response = await fetch(koofrUrl, {
       method: 'GET',
       headers: { Authorization: authHeader() },
+      signal: controller.signal,
     });
 
     if (!response.ok) {
@@ -150,17 +158,19 @@ router.get('/file', async (req, res) => {
     if (cl) res.set('Content-Length', cl);
 
     res.status(response.status);
-    res.flushHeaders();
-
-    for await (const chunk of response.body) {
-      res.write(chunk);
-    }
-    res.end();
+    await pipeline(Readable.fromWeb(response.body), res);
   } catch (err) {
-    console.error('[koofr] file proxy error:', err);
-    if (!res.headersSent) {
-      res.status(500).json({ error: err.message });
+    if (err.name !== 'AbortError') {
+      console.error('[koofr] file proxy error:', err);
     }
+    if (!res.headersSent) {
+      const status = err.name === 'AbortError' ? 504 : 500;
+      res.status(status).json({ error: err.name === 'AbortError' ? 'Koofr file request timed out' : err.message });
+    } else {
+      res.destroy(err);
+    }
+  } finally {
+    clearTimeout(timeout);
   }
 });
 

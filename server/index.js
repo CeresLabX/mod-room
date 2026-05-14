@@ -13,6 +13,13 @@ const koofrRoutes = require('./routes/koofr');
 const app = express();
 const server = http.createServer(app);
 
+process.on('unhandledRejection', (err) => {
+  console.error('[process] unhandled rejection:', err);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[process] uncaught exception:', err);
+});
+
 const PORT = process.env.PORT || 3001;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
@@ -162,24 +169,29 @@ io.on('connection', (socket) => {
 
   // Host controls
   socket.on('play', async ({ itemId }) => {
-    if (!currentRoom || !currentNickname) return;
-    const db = getDb();
-    const roomRes = await db.query('SELECT * FROM rooms WHERE id = $1', [currentRoom]);
-    if (!roomRes.rows.length || roomRes.rows[0].host_nickname !== currentNickname) {
-      socket.emit('error', { message: 'Only the host can control playback' });
-      return;
+    try {
+      if (!currentRoom || !currentNickname) return;
+      const db = getDb();
+      const roomRes = await db.query('SELECT * FROM rooms WHERE id = $1', [currentRoom]);
+      if (!roomRes.rows.length || roomRes.rows[0].host_nickname !== currentNickname) {
+        socket.emit('error', { message: 'Only the host can control playback' });
+        return;
+      }
+      const updateCols = ['playback_status = $1', 'playback_updated_at = NOW()'];
+      const updateVals = ['playing', currentRoom];
+      if (itemId) {
+        updateCols.push(`current_item_id = $${updateVals.length + 1}`);
+        updateVals.push(itemId);
+      }
+      await db.query(
+        `UPDATE rooms SET ${updateCols.join(', ')} WHERE id = $${updateVals.length}`,
+        updateVals
+      );
+      io.to(currentRoom).emit('playback-update', { itemId: itemId || roomRes.rows[0].current_item_id, status: 'playing', timestamp: 0 });
+    } catch (err) {
+      console.error('[socket] play failed:', err);
+      socket.emit('error', { message: 'Playback failed; please try again.' });
     }
-    const updateCols = ['playback_status = $1', 'playback_updated_at = NOW()'];
-    const updateVals = ['playing', currentRoom];
-    if (itemId) {
-      updateCols.push(`current_item_id = $${updateVals.length + 1}`);
-      updateVals.push(itemId);
-    }
-    await db.query(
-      `UPDATE rooms SET ${updateCols.join(', ')} WHERE id = $${updateVals.length}`,
-      updateVals
-    );
-    io.to(currentRoom).emit('playback-update', { itemId: itemId || roomRes.rows[0].current_item_id, status: 'playing', timestamp: 0 });
   });
 
   socket.on('pause', async () => {
@@ -291,7 +303,6 @@ io.on('connection', (socket) => {
         'UPDATE rooms SET current_item_id = $1, playback_status = $2 WHERE id = $3',
         [newItem.id, 'playing', currentRoom]
       );
-      io.to(currentRoom).emit('playback-update', { itemId: newItem.id, status: 'playing', timestamp: 0 });
     }
 
     const queueRes = await db.query(
@@ -306,6 +317,9 @@ io.on('connection', (socket) => {
         addedBy: q.added_by, position: q.position,
       }))
     });
+    if (wasIdle) {
+      io.to(currentRoom).emit('playback-update', { itemId: newItem.id, status: 'playing', timestamp: 0 });
+    }
     io.to(currentRoom).emit('activity', {
       message: `${currentNickname} added "${newItem.title}"`,
       ts: Date.now(),
