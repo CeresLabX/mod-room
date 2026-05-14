@@ -25,7 +25,7 @@ export default function RoomLanding({ theme, applyTheme }) {
       const res = await axios.post('/api/rooms', { nickname: nick });
       localStorage.setItem('modroom-nick', nick);
       localStorage.setItem('modroom-host', '1');
-      navigate(`/room/code/${res.data.roomCode}`);
+      navigate(`/room/${res.data.roomCode}`);
     } catch (e) {
       setError(e.response?.data?.error || 'Failed to create room');
       setLoading(false);
@@ -40,10 +40,10 @@ export default function RoomLanding({ theme, applyTheme }) {
     setLoading(true);
     setError('');
     try {
-      // Search for room by code
-      const res = await axios.get(`/api/rooms/code/${code}`);
+      // Verify room exists, but keep the readable code in the URL.
+      await axios.get(`/api/rooms/code/${code}`);
       localStorage.setItem('modroom-nick', nick);
-      navigate(`/room/${res.data.id}`);
+      navigate(`/room/${code}`);
     } catch (e) {
       if (e.response?.status === 404) {
         // Try as room ID directly

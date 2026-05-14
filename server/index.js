@@ -88,14 +88,18 @@ io.on('connection', (socket) => {
 
     const db = getDb();
 
-    // Verify room exists
-    const roomRes = await db.query('SELECT * FROM rooms WHERE id = $1', [roomId]);
+    // Verify room exists. Accept either canonical UUID or human room code.
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const roomRes = uuidRegex.test(roomId)
+      ? await db.query('SELECT * FROM rooms WHERE id = $1', [roomId])
+      : await db.query('SELECT * FROM rooms WHERE room_code = $1', [roomId.toUpperCase()]);
     if (roomRes.rows.length === 0) {
       socket.emit('error', { message: 'Room not found' });
       return;
     }
 
     const room = roomRes.rows[0];
+    const canonicalRoomId = room.id;
 
     // Leave previous room if any
     if (currentRoom) {
@@ -104,16 +108,16 @@ io.on('connection', (socket) => {
       if (prevRoom) prevRoom.connectedUsers.delete(socket.id);
     }
 
-    currentRoom = roomId;
+    currentRoom = canonicalRoomId;
     currentNickname = safeNickname;
 
-    socket.join(roomId);
+    socket.join(canonicalRoomId);
 
     // Register in in-memory sync service
-    const roomSyncState = roomSync.initPlaybackStateFromDb(roomId, room);
+    const roomSyncState = roomSync.initPlaybackStateFromDb(canonicalRoomId, room);
     roomSyncState.connectedUsers.add(socket.id);
     if (!roomSyncState.heartbeatInterval) {
-      roomSync.startRoomHeartbeat(io, roomId);
+      roomSync.startRoomHeartbeat(io, canonicalRoomId);
     }
 
     // Upsert participant
@@ -121,19 +125,19 @@ io.on('connection', (socket) => {
       INSERT INTO room_participants (room_id, nickname, is_host, last_seen)
       VALUES ($1, $2, $3, NOW())
       ON CONFLICT (room_id, nickname) DO UPDATE SET last_seen = NOW()
-    `, [roomId, safeNickname, room.host_nickname === safeNickname]);
+    `, [canonicalRoomId, safeNickname, room.host_nickname === safeNickname]);
 
     // Send full room state
     const queueRes = await db.query(
       'SELECT * FROM queue_items WHERE room_id = $1 ORDER BY position ASC',
-      [roomId]
+      [canonicalRoomId]
     );
     const usersRes = await db.query(
       'SELECT nickname, is_host FROM room_participants WHERE room_id = $1 ORDER BY last_seen DESC',
-      [roomId]
+      [canonicalRoomId]
     );
 
-    const roomSyncForBroadcast = roomSync.getOrCreateActiveRoom(roomId);
+    const roomSyncForBroadcast = roomSync.getOrCreateActiveRoom(canonicalRoomId);
     const broadcastState = roomSync.buildPlaybackBroadcast(roomSyncForBroadcast);
     const expectedPositionMs = broadcastState?.expectedPositionMs || 0;
 
@@ -164,17 +168,17 @@ io.on('connection', (socket) => {
         nickname: u.nickname,
         isHost: u.is_host,
       })),
-      clientsCount: getRoomClients(roomId),
+      clientsCount: getRoomClients(canonicalRoomId),
       playback: broadcastState,
     });
 
     // Broadcast join to room
-    socket.to(roomId).emit('user-joined', {
+    socket.to(canonicalRoomId).emit('user-joined', {
       nickname: safeNickname,
-      clientsCount: getRoomClients(roomId),
+      clientsCount: getRoomClients(canonicalRoomId),
     });
 
-    console.log(`[socket] ${safeNickname} joined room ${roomId} (${getRoomClients(roomId)} clients)`);
+    console.log(`[socket] ${safeNickname} joined room ${canonicalRoomId} (${getRoomClients(canonicalRoomId)} clients)`);
   });
 
   // Playback controls

@@ -190,7 +190,7 @@ export default function RoomView({ theme, applyTheme }) {
   // Keep URL in sync with room code (so shared URLs use code, not UUID)
   useEffect(() => {
     if (roomData?.roomCode && roomId !== roomData.roomCode) {
-      window.history.replaceState(null, '', `/room/code/${roomData.roomCode}`);
+      window.history.replaceState(null, '', `/room/${roomData.roomCode}`);
     }
   }, [roomData?.roomCode]);
 

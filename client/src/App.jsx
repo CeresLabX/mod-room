@@ -2,18 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
 import RoomLanding from './components/RoomLanding.jsx';
 import RoomView from './components/RoomView.jsx';
-import axios from 'axios';
-
-// Resolves a room code to UUID then redirects to /room/:uuid
+// Legacy /room/code/:roomCode route: normalize to canonical readable /room/:roomCode
 function ResolveRoomCode() {
   const { roomCode } = useParams();
   const navigate = useNavigate();
 
   useEffect(() => {
     if (!roomCode) { navigate('/'); return; }
-    axios.get(`/api/rooms/code/${roomCode}`)
-      .then(res => navigate(`/room/${res.data.id}`, { replace: true }))
-      .catch(() => navigate('/'));
+    navigate(`/room/${roomCode.toUpperCase()}`, { replace: true });
   }, [roomCode]);
 
   return <div style={{ padding: 32, textAlign: 'center', color: 'var(--dim)' }}>Joining room...</div>;
