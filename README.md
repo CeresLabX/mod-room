@@ -218,6 +218,33 @@ Verification:
   - MOD seeking note visible below progress bar.
   - Zero console/page errors.
 
+### 2026-05 democratic playback
+
+Changed the playback model from host-only to democratic — any user in the room can control playback, add media, and remove items from the queue.
+
+Changes:
+- Server `socket.on('play')`: removed host-only check (`host_nickname !== currentNickname`).
+- Server `socket.on('pause')`: removed host-only check.
+- Server `socket.on('next')`: removed host-only check.
+- Server `socket.on('remove-from-queue')`: removed host-or-owner check (`added_by !== currentNickname && !isHost`). Any user can remove any item.
+- `client/src/components/PlayerPanel.jsx`: removed `isHost` ternary. All users now see `[▶ PLAY]`, `[⏸ PAUSE]`, `[⏭ NEXT]`, `[⏹ STOP]` buttons instead of the passive "SYNCED TO ROOM" text.
+- `client/src/components/QueuePanel.jsx`: removed `isHost || item.addedBy === nickname` guard from the `[X]` remove button. All users can remove any queue item.
+- Note: `add-to-queue` was already open to all users (no host gate existed).
+
+Verification:
+- Built production assets with `npm run build`.
+- Syntax checked `server/index.js`.
+- Pushed Git commit `ba2cca8 fix: democratic playback — all users can control, add, and remove` to GitHub `main`.
+- Railway auto-deployed and production served new hashed assets (`index-CJSEO2-1.js`).
+- Production health check returned `200 OK`.
+- Browser multi-user test on production verified:
+  - Guest sees `[⏸ PAUSE]`, `[⏭ NEXT]`, `[⏹ STOP]` controls (not just "SYNCED TO ROOM").
+  - Guest sees `[X]` remove buttons on every queue item.
+  - Guest clicks **PAUSE** → host header shows `⏸ PAUSED` (server accepted the command).
+  - Guest clicks **PLAY** and **NEXT** successfully.
+  - Guest clicks **remove** → queue drops from 2 to 1 items (server accepted).
+  - Zero console/page errors.
+
 ---
 
 ## Known Limitations
