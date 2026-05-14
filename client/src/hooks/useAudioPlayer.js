@@ -91,10 +91,17 @@ export function useAudioPlayer({ item, onEnded, onError }) {
         pendingPlayRef.current = false;
         setTimeout(() => {
           if (playerRef.current) {
-            playerRef.current.play().then(() => setStatus('playing')).catch((err) => {
-              console.warn('[player] auto-play blocked:', err.message);
-              setStatus('paused');
-            });
+            playerRef.current.play()
+              .then(() => { setAutoplayBlocked(false); setStatus('playing'); })
+              .catch((err) => {
+                if (err.name === 'NotAllowedError') {
+                  console.warn('[player] Autoplay blocked — user interaction required');
+                  setAutoplayBlocked(true);
+                } else {
+                  console.warn('[player] auto-play failed:', err.message);
+                }
+                setStatus('paused');
+              });
           }
         }, 50);
       }

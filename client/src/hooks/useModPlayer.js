@@ -184,8 +184,26 @@ export function useModPlayer({ item, onEnded, onError }) {
 
       if (pendingPlayRef.current || newItem.autoPlay) {
         pendingPlayRef.current = false;
-        if (ctx.state === 'suspended') await ctx.resume();
-        setStatus('playing');
+        let resumed = false;
+        try {
+          if (ctx.state === 'suspended') {
+            await ctx.resume();
+          }
+          resumed = ctx.state !== 'suspended';
+        } catch (err) {
+          if (err.name !== 'NotAllowedError') {
+            throw err;
+          }
+          // NotAllowedError — fall through to blocked handling below
+        }
+        if (!resumed) {
+          console.warn('[modplayer] Autoplay blocked — user interaction required');
+          setAutoplayBlocked(true);
+          setStatus('paused');
+        } else {
+          setAutoplayBlocked(false);
+          setStatus('playing');
+        }
       } else {
         if (ctx.state === 'running') await ctx.suspend().catch(() => {});
         setStatus('paused');
