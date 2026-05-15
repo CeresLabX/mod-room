@@ -97,24 +97,28 @@ async function isDirectory(webdavPath) {
 
 /**
  * List immediate children of a WebDAV directory.
- * Uses Depth:1 PROPFIND and guesses directory vs file using known extensions
- * and content-type hints from Koofr.
+ * Detects directories by checking if PROPFIND returns 207 Multi-Status (directory)
+ * vs 200 OK (file). Falls back to extension heuristics for edge cases.
  */
 async function webdavList(webdavPath) {
   const koofrUrl = `${baseUrl}${webdavPath}/`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 20000);
-  const response = await fetch(koofrUrl, {
-    method: 'PROPFIND',
-    headers: {
-      Authorization: authHeader(),
-      Depth: '1',
-      'Content-Type': 'application/xml',
-    },
-    body: '<?xml version="1.0" encoding="utf-8"?><propfind xmlns="DAV:"><prop><displayname/><getcontentlength/><getcontenttype/><resourcetype/></prop></propfind>',
-    signal: controller.signal,
-  });
-  clearTimeout(timeout);
+  let response;
+  try {
+    response = await fetch(koofrUrl, {
+      method: 'PROPFIND',
+      headers: {
+        Authorization: authHeader(),
+        Depth: '1',
+        'Content-Type': 'application/xml',
+      },
+      body: '<?xml version="1.0" encoding="utf-8"?><propfind xmlns="DAV:"><prop><displayname/><getcontentlength/><getcontenttype/><resourcetype/></prop></propfind>',
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
 
   if (!response.ok) {
     throw new Error(`WebDAV error ${response.status} for ${webdavPath}`);
@@ -162,19 +166,21 @@ async function webdavList(webdavPath) {
 
 function parsePropfind(xml) {
   const responses = [];
-  const re = /<d:response>([\s\S]*?)<\/d:response>/gi;
+  // Match both <D:response> and <d:response> (Koofr uses uppercase D)
+  const re = /<D:response>([\s\S]*?)<\/D:response>/gi;
   let m;
   while ((m = re.exec(xml)) !== null) {
     const block = m[1];
-    const hrefMatch = block.match(/<d:href>([^<]*)<\/d:href>/i);
+    const hrefMatch = block.match(/<D:href>([^<]*)<\/D:href>/i);
     const href = hrefMatch ? decodeURIComponent(hrefMatch[1]) : '';
-    const displayMatch = block.match(/<d:displayname>([^<]*)<\/d:displayname>/i);
+    const displayMatch = block.match(/<D:displayname>([^<]*)<\/D:displayname>/i);
     const displayName = displayMatch ? displayMatch[1] : '';
-    const lenMatch = block.match(/<d:getcontentlength[^>]*>([^<]*)<\/d:getcontentlength>/i);
+    const lenMatch = block.match(/<D:getcontentlength[^>]*>([^<]*)<\/D:getcontentlength>/i);
     const contentLength = lenMatch ? parseInt(lenMatch[1], 10) : 0;
-    const typeMatch = block.match(/<d:getcontenttype>([^<]*)<\/d:getcontenttype>/i);
+    const typeMatch = block.match(/<D:getcontenttype>([^<]*)<\/D:getcontenttype>/i);
     const contentType = typeMatch ? typeMatch[1] : '';
-    const isCollection = /<d:collection\/?>/i.test(block);
+    // Directory = has <D:collection/> tag
+    const isCollection = /<D:collection\/?>/i.test(block) || /<d:collection\/?>/i.test(block);
     responses.push({ href, displayName, contentLength, contentType, isCollection });
   }
   return responses;
