@@ -218,7 +218,7 @@ router.get('/', async (req, res) => {
        FROM music_library_index
        WHERE parent_path = $1
        ORDER BY (type='folder') DESC, lower(name) ASC`,
-      [parentPath]
+      [parentPath.replace(/^\//, '')]
     );
 
     const items = result.rows.map(row => ({
@@ -261,7 +261,7 @@ router.get('/search', async (req, res) => {
   }
 
   try {
-    const scope = relPath === '/' ? '' : relPath;
+    const scope = relPath === '/' ? '' : relPath.replace(/^\//, '');
     const pattern = scope ? scope + '/%' : '%';
 
     const result = await db.query(
@@ -308,28 +308,9 @@ router.get('/debug-list', async (req, res) => {
  * Rebuilds the library index from WebDAV via recursive walk.
  * Protected by LIBRARY_REINDEX_TOKEN header.
  */
-// DEBUG: check what token the server sees
-router.get('/debug-token', (req, res) => {
-  res.json({ tokenSet: !!reindexToken, tokenLength: reindexToken ? reindexToken.length : 0, tokenPreview: reindexToken ? reindexToken.slice(0, 4) + '...' : null });
-});
-
-// DEBUG: verify a given token against the server's reindexToken
-router.post('/debug-verify', (req, res) => {
-  const incoming = req.headers['x-reindex-token'] || '';
-  res.json({
-    incomingLength: incoming.length,
-    incomingPreview: incoming.slice(0, 8) + '...',
-    serverLength: reindexToken ? reindexToken.length : 0,
-    serverPreview: reindexToken ? reindexToken.slice(0, 8) + '...' : null,
-    match: incoming === reindexToken
-  });
-});
-
 router.post('/reindex', async (req, res) => {
   const token = req.headers['x-reindex-token'];
-  // TEMP: allow reindex without token check to enable reindex via Railway env var
-  // TODO: restore token check once Railway variable system works reliably
-  if (false && (!reindexToken || token !== reindexToken)) {
+  if (!reindexToken || token !== reindexToken) {
     return res.status(403).json({ error: 'Forbidden' });
   }
 
