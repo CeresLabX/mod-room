@@ -19,8 +19,13 @@ const {
 
 const KOOFR_ROOT = webdavRoot;
 
-// Known directory names at the root of /Vectrix/public — populated by reindex
-const KNOWN_DIRS = new Set(['MOD', 'XM', 'S3M', 'IT', '669', 'AMF', 'AMS', 'DBM', 'DMF', 'DSM', 'FAR', 'MDL', 'MED', 'OKT', 'PTM', 'ULT', 'UMX', 'WAV', 'MP3', 'OGG', 'FLAC', 'M4A', 'SNAPSHOT', 'DIGI', 'C67']);
+// Known directory names at the root of /Vectrix/public — these are format subdirectories, NOT file extensions
+const KNOWN_DIRS = new Set([
+  'MOD', 'XM', 'S3M', 'IT', '669', 'AMF', 'AMS', 'DBM', 'DMF', 'DSM', 'FAR',
+  'MDL', 'MED', 'OKT', 'PTM', 'ULT', 'UMX', 'SNAPSHOT', 'DIGI', 'C67',
+  'J2B', 'MO3', 'MT2', 'PLM', 'PSM', 'PTM', 'SFX', 'STP', 'SYMMOD',
+  'HVL', 'IMF', 'FMT', 'GDM', 'DTM', 'MT2',
+]);
 
 const PLAYABLE_EXTENSIONS = new Set([
   'MOD','XM','S3M','IT','MPTM','MTM','STM','669',
@@ -132,24 +137,22 @@ async function webdavList(webdavPath) {
     // Determine name
     const name = item.displayName || relClean.split('/').pop() || '';
 
-    // Determine if directory: either marked as collection, or no extension (common for mod folders),
-    // or name matches known directory set
+    // Determine if directory:
+    // - It's a FILE if: has a playable extension (song.mod) OR has an extension but is NOT a known folder (readme.txt)
+    // - It's a DIRECTORY if: no extension, OR it's a known folder name (MOD/XM/669/etc), OR marked as collection
     const ext = name.includes('.') ? name.split('.').pop().toUpperCase() : '';
-    const isDir = item.isCollection ||
-      !ext ||
-      KNOWN_DIRS.has(name.toUpperCase()) ||
-      (!ext && !name.includes('.'));
-
-    // Determine extension and playable
-    const fileExt = name.includes('.') ? name.split('.').pop().toUpperCase() : '';
+    const isPlayableExt = isPlayable(ext);
+    const isKnownFolder = KNOWN_DIRS.has(name.toUpperCase());
+    const isFile = isPlayableExt || (ext && !isKnownFolder);
+    const isDirectory = !isFile;
 
     items.push({
       name,
       relPath: relClean,
       parentPath: relClean.includes('/') ? relClean.substring(0, relClean.lastIndexOf('/')) : '',
-      isDirectory: isDir,
-      extension: fileExt,
-      playable: isPlayable(fileExt),
+      isDirectory,
+      extension: ext,
+      playable: isPlayableExt,
       size: item.contentLength || 0,
     });
   }
