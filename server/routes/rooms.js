@@ -76,6 +76,25 @@ router.post('/', async (req, res) => {
   }
 });
 
+// Lookup room by room code (e.g. "FOYER-5643")
+router.get('/code/:code', async (req, res) => {
+  try {
+    const { code } = req.params;
+    const db = getDb();
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    // room_code is VARCHAR(10), alphanumeric + hyphen
+    if (!code || !/^[A-Z0-9][A-Z0-9-]{0,9}$/.test(code)) {
+      return res.status(400).json({ error: 'Invalid room code format' });
+    }
+    const roomRes = await db.query('SELECT id FROM rooms WHERE room_code = $1', [code.toUpperCase()]);
+    if (!roomRes.rows.length) return res.status(404).json({ error: 'Room not found' });
+    res.json({ id: roomRes.rows[0].id });
+  } catch (err) {
+    console.error('[/rooms/code/:code GET error]', err.message);
+    res.status(500).json({ error: 'Failed to lookup room', detail: err.message });
+  }
+});
+
 // Get room
 router.get('/:roomId', async (req, res) => {
   try {
@@ -211,7 +230,19 @@ router.post('/:roomId/queue', async (req, res) => {
       });
     }
 
-    res.json({ ok: true, itemId: newItem.id, queue });
+    const updatedRoomRes = await db.query(
+      'SELECT current_item_id, playback_status FROM rooms WHERE id = $1',
+      [canonicalRoomId]
+    );
+    const updatedRoom = updatedRoomRes.rows[0] || {};
+
+    res.json({
+      ok: true,
+      itemId: newItem.id,
+      currentItemId: updatedRoom.current_item_id || newItem.id,
+      playbackStatus: updatedRoom.playback_status || (wasIdle ? 'playing' : room.playback_status),
+      queue,
+    });
   } catch (err) {
     console.error('[/rooms/:roomId/queue POST error]', err.message);
     res.status(500).json({ error: 'Failed to add item', detail: err.message });
@@ -272,25 +303,6 @@ router.delete('/:roomId', async (req, res) => {
   } catch (err) {
     console.error('[/rooms/:roomId DELETE error]', err.message);
     res.status(500).json({ error: 'Failed to delete room', detail: err.message });
-  }
-});
-
-// Lookup room by room code (e.g. "FOYER-5643")
-router.get('/code/:code', async (req, res) => {
-  try {
-    const { code } = req.params;
-    const db = getDb();
-    if (!db) return res.status(503).json({ error: 'Database not configured' });
-    // room_code is VARCHAR(10), alphanumeric + hyphen
-    if (!code || !/^[A-Z0-9][A-Z0-9-]{0,9}$/.test(code)) {
-      return res.status(400).json({ error: 'Invalid room code format' });
-    }
-    const roomRes = await db.query('SELECT id FROM rooms WHERE room_code = $1', [code.toUpperCase()]);
-    if (!roomRes.rows.length) return res.status(404).json({ error: 'Room not found' });
-    res.json({ id: roomRes.rows[0].id });
-  } catch (err) {
-    console.error('[/rooms/code/:code GET error]', err.message);
-    res.status(500).json({ error: 'Failed to lookup room', detail: err.message });
   }
 });
 

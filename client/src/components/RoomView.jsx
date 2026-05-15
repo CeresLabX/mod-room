@@ -287,7 +287,7 @@ export default function RoomView({ theme, applyTheme }) {
 
   const addToQueueViaHttp = useCallback(async (item) => {
     const targetRoomId = roomData?.id || roomId;
-    console.warn('[queue] Socket add failed or timed out; using HTTP fallback');
+    console.info('[queue] Adding via HTTP queue endpoint');
     const res = await axios.post(`/api/rooms/${encodeURIComponent(targetRoomId)}/queue`, {
       item,
       nickname,
@@ -297,31 +297,35 @@ export default function RoomView({ theme, applyTheme }) {
     }
     if (Array.isArray(res.data.queue)) {
       handleQueueUpdated({ queue: res.data.queue });
+
+      // If the server made this the current item, hydrate local playback too.
+      // This matters when Socket.IO is connected poorly or not joined yet: the
+      // HTTP insert is persisted, but this browser may miss the socket playback
+      // broadcast and otherwise appear to add-but-not-play until refresh.
+      const currentItemId = res.data.currentItemId || res.data.itemId;
+      const addedOrCurrent = res.data.queue.find(q => q.id === currentItemId) || null;
+      if (addedOrCurrent && (!playbackRef.current.itemId || playbackRef.current.itemId === currentItemId)) {
+        playbackRef.current = {
+          ...playbackRef.current,
+          status: res.data.playbackStatus || 'playing',
+          itemId: currentItemId,
+          timestamp: 0,
+          positionMsAtLastUpdate: 0,
+          serverUpdatedAt: Date.now(),
+          isPlaying: (res.data.playbackStatus || 'playing') === 'playing',
+        };
+        setPlayback({ ...playbackRef.current });
+        setCurrentItem(addedOrCurrent);
+      }
     }
     return res.data;
   }, [handleQueueUpdated, nickname, roomData?.id, roomId]);
 
   const handleAddToQueue = async (item, options = {}) => {
-    let response;
-    try {
-      const socket = await ensureSocketReady();
-      response = await new Promise((resolve, reject) => {
-        socket.timeout(8000).emit('add-to-queue', { item }, (err, ackResponse) => {
-          if (err) {
-            reject(err);
-            return;
-          }
-          if (!ackResponse?.ok) {
-            reject(new Error(ackResponse?.error || 'Failed to add item'));
-            return;
-          }
-          resolve(ackResponse);
-        });
-      });
-    } catch (err) {
-      console.warn('[queue] Socket add failed, trying HTTP fallback:', err?.message || err);
-      response = await addToQueueViaHttp(item);
-    }
+    // Use HTTP as the source-of-truth mutation path. Socket.IO is still used for
+    // room sync/broadcasts, but making Add wait on a socket ACK caused slow or
+    // phantom adds on flaky WebSocket connections.
+    const response = await addToQueueViaHttp(item);
 
     if (!options.keepOpen) {
       setShowAddMedia(false);
