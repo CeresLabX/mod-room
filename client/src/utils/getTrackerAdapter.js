@@ -5,13 +5,10 @@
 import { LibOpenMptPlayerAdapter } from './LibOpenMptPlayerAdapter.js';
 import { AhxPlayerAdapter } from './AhxPlayerAdapter.js';
 import { UnsupportedFormatAdapter } from './UnsupportedFormatAdapter.js';
-import { getEngineForExtension } from './trackerFormats.js';
+import { getEngineForExtension, LIBOPENMPT_FORMATS, AHX_FORMATS } from './trackerFormats.js';
 
-export const LIBOPENMPT_FORMATS = new Set([
-  'mod', 'xm', 'it', 's3m', 'mptm', 'mtm', 'med', '669', 'dbm', 'stm', 'okt', 'amf', 'dmf', 'psm', 'ptm', 'ult',
-]);
-
-export const AHX_FORMATS = new Set(['ahx', 'hvl']);
+// Re-export for consumers that import from this module
+export { LIBOPENMPT_FORMATS, AHX_FORMATS };
 
 /**
  * Get an adapter instance for the given file, using the provided AudioContext.

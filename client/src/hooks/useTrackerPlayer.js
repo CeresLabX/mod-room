@@ -83,6 +83,10 @@ export function useTrackerPlayer({ item, audioContext, onEnded, onError }) {
       }
 
       const filename = newItem.filename || newItem.url.split('/').pop();
+      const ext = (filename || '').split('.').pop().toLowerCase();
+
+      // Log for debugging non-.mod tracker files
+      console.info(`[tracker-player] Loading: "${filename}" (.${ext}) from ${newItem.url}`);
 
       // Create adapter
       const adapter = getAdapterForFile(filename, activeCtx);
@@ -156,7 +160,7 @@ export function useTrackerPlayer({ item, audioContext, onEnded, onError }) {
       }
 
     } catch (err) {
-      console.error('[tracker] load failed:', err);
+      console.error(`[tracker] load failed for "${filename}" (.${ext}):`, err.message || err);
       setStatus('error');
       onErrorRef.current && onErrorRef.current(err);
     }

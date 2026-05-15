@@ -285,6 +285,7 @@ export const FORMAT_DATA = [
 
 export const LIBOPENMPT_FORMATS = new Set([
   'mod', 'xm', 'it', 's3m', 'mptm', 'mtm', 'med', '669', 'dbm', 'stm', 'okt', 'amf', 'dmf', 'psm', 'ptm', 'ult',
+  'ams', 'dsm', 'far', 'mdl', 'umx',
 ]);
 
 export const AHX_FORMATS = new Set(['ahx', 'hvl']);

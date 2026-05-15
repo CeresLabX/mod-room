@@ -5,41 +5,31 @@ import { useTrackerPlayer } from '../hooks/useTrackerPlayer.js';
 import Visualizer from './Visualizer.jsx';
 import VideoPlayer from './VideoPlayer.jsx';
 import LearnAboutMusicFormats from './LearnAboutMusicFormats.jsx';
-
-// All supported tracker formats (uppercase)
-const ALL_TRACKER_FORMATS = new Set([
-  'MOD', 'XM', 'S3M', 'IT', 'MPT', 'AHX', 'MED', 'MTM', '669', 'ULT', 'STM', 'OKT',
-  'AMF', 'DMF', 'PSM', 'PTM', 'DBM',
-]);
-
-// Pure MOD (handled by modplayer Protracker engine)
-const MODPLAYER_FORMATS = new Set(['MOD']);
-
-// Formats that chiptune3/libopenmpt handles (with seeking support)
-const LIBOPENMPT_TRACKER_FORMATS = new Set([
-  'XM', 'S3M', 'IT', 'MPT', 'MED', 'MTM', '669', 'ULT', 'STM', 'OKT',
-  'AMF', 'DMF', 'PSM', 'PTM', 'DBM',
-]);
+import {
+  ALL_TRACKER_EXTENSIONS,
+  MODPLAYER_FORMATS,
+  LIBOPENMPT_FORMATS,
+} from '../utils/trackerFormats.js';
 
 function isTrackerFormat(item) {
   if (!item) return false;
-  const fmt = (item.format || '').toUpperCase();
-  const ext = (item.filename || item.url || '').split('.').pop().toUpperCase();
-  return ALL_TRACKER_FORMATS.has(fmt) || ALL_TRACKER_FORMATS.has(ext);
+  const ext = (item.filename || item.url || '').split('.').pop().toLowerCase();
+  const fmt = (item.format || '').toLowerCase();
+  return ALL_TRACKER_EXTENSIONS.has(fmt) || ALL_TRACKER_EXTENSIONS.has(ext);
 }
 
 function isModPlayerFormat(item) {
   if (!item) return false;
-  const fmt = (item.format || '').toUpperCase();
-  const ext = (item.filename || item.url || '').split('.').pop().toUpperCase();
+  const ext = (item.filename || item.url || '').split('.').pop().toLowerCase();
+  const fmt = (item.format || '').toLowerCase();
   return MODPLAYER_FORMATS.has(fmt) || MODPLAYER_FORMATS.has(ext);
 }
 
 function isTrackerWithSeeking(item) {
   if (!item) return false;
-  const fmt = (item.format || '').toUpperCase();
-  const ext = (item.filename || item.url || '').split('.').pop().toUpperCase();
-  return LIBOPENMPT_TRACKER_FORMATS.has(fmt) || LIBOPENMPT_TRACKER_FORMATS.has(ext);
+  const ext = (item.filename || item.url || '').split('.').pop().toLowerCase();
+  const fmt = (item.format || '').toLowerCase();
+  return LIBOPENMPT_FORMATS.has(fmt) || LIBOPENMPT_FORMATS.has(ext);
 }
 
 function formatTime(s) {

@@ -2,6 +2,11 @@
  * UnsupportedFormatAdapter — fallback for extensions we don't recognize.
  */
 
+import { LIBOPENMPT_FORMATS, MODPLAYER_FORMATS, AHX_FORMATS } from './trackerFormats.js';
+
+const SUPPORTED_LIST = [...MODPLAYER_FORMATS, ...LIBOPENMPT_FORMATS, ...AHX_FORMATS]
+  .map(e => e.toUpperCase()).sort().join(', ');
+
 export class UnsupportedFormatAdapter {
   constructor(audioContext) {
     this._audioContext = audioContext;
@@ -9,11 +14,11 @@ export class UnsupportedFormatAdapter {
   }
 
   load(arrayBuffer, filename) {
+    const ext = (filename || '').split('.').pop();
     return Promise.reject(
       new Error(
-        `Unsupported tracker format: "${filename}". ` +
-        'Supported formats include: MOD, XM, IT, S3M, MPTM, MTM, MED, 669, DBM, STM, OKT, AMF, DMF, PSM, PTM, ULT. ' +
-        'AHX/HVL are experimental and not yet available.'
+        `Unsupported tracker format: "${filename}" (.${ext}). ` +
+        `Supported: ${SUPPORTED_LIST}. AHX/HVL are experimental and not yet available.`
       )
     );
   }
