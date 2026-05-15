@@ -127,11 +127,17 @@ async function webdavList(webdavPath) {
   const xml = await response.text();
   const responses = parsePropfind(xml);
 
-  // DEBUG: log first few raw responses for MOD folder
-  if (webdavPath.includes('/MOD')) {
+  // DEBUG: log raw responses for MOD and 669 folders
+  if (webdavPath.includes('/MOD') || webdavPath.includes('/669')) {
     console.log(`[webdavList] ${webdavPath}: ${responses.length} raw responses`);
     for (const r of responses.slice(0, 3)) {
       console.log(`  raw: href=${r.href} isCollection=${r.isCollection}`);
+    }
+  } else if (responses.length > 0) {
+    // Log non-MOD, non-669 calls that have items but are not root
+    const pathParts = webdavPath.split('/').filter(Boolean);
+    if (pathParts.length >= 3) { // deeper than /Vectrix/public/X
+      console.log(`[webdavList] ${webdavPath}: ${responses.length} items`);
     }
   }
 
