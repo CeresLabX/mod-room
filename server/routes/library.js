@@ -323,11 +323,18 @@ router.post('/reindex', async (req, res) => {
       return;
     }
 
+    // Log first few items of first call to debug detection
+    if (stats.folders === 0 && stats.files === 0) {
+      console.log(`[library] walk(${webdavPath}) got ${items.length} items, first 5:`);
+      for (const item of items.slice(0, 5)) {
+        console.log(`  name=${item.name} isDir=${item.isDirectory} ext=${item.extension} playable=${item.playable} relPath=${item.relPath}`);
+      }
+    }
+
     for (const item of items) {
       if (item.isDirectory) {
         stats.folders++;
         await upsertItem(item);
-        // Recurse into subdirectory
         try {
           await walk(KOOFR_ROOT + '/' + item.relPath, item.relPath);
         } catch (e) {
