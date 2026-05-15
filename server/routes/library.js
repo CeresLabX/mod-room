@@ -103,22 +103,7 @@ async function isDirectory(webdavPath) {
 async function webdavList(webdavPath) {
   const koofrUrl = `${baseUrl}${webdavPath}/`;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 20000);
-  let response;
-  try {
-    response = await fetch(koofrUrl, {
-      method: 'PROPFIND',
-      headers: {
-        Authorization: authHeader(),
-        Depth: '1',
-        'Content-Type': 'application/xml',
-      },
-      body: '<?xml version="1.0" encoding="utf-8"?><propfind xmlns="DAV:"><prop><displayname/><getcontentlength/><getcontenttype/><resourcetype/></prop></propfind>',
-      signal: controller.signal,
-    });
-  } finally {
-    clearTimeout(timeout);
-  }
+  const timeout = setTimeout(() => controller.abort(), 60000);
 
   if (!response.ok) {
     throw new Error(`WebDAV error ${response.status} for ${webdavPath}`);
@@ -347,7 +332,11 @@ router.post('/reindex', async (req, res) => {
     try {
       items = await webdavList(webdavPath);
     } catch (e) {
-      console.warn(`[library] failed to list ${webdavPath}: ${e.message}`);
+      if (e.name === 'AbortError') {
+        console.warn(`[library] timeout listing ${webdavPath} — skipping`);
+      } else {
+        console.warn(`[library] failed to list ${webdavPath}: ${e.message}`);
+      }
       return;
     }
 
