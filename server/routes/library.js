@@ -328,6 +328,8 @@ router.post('/reindex', async (req, res) => {
   console.log('[library] Starting reindex from', KOOFR_ROOT);
 
   const stats = { folders: 0, files: 0, playable: 0, skipped: 0 };
+  // Record start time for pruning old entries after walk completes
+  const reindexStartedAt = new Date();
 
   async function upsertItem(item) {
     const { name, relPath, parentPath, isDirectory, extension, playable, size } = item;
@@ -364,14 +366,8 @@ router.post('/reindex', async (req, res) => {
       return;
     }
 
-    // Log first few items of first call to debug detection
-    const isModFolder = webdavPath.includes('/MOD');
-    if ((stats.folders === 0 && stats.files === 0) || isModFolder) {
-      console.log(`[library] walk(${webdavPath}) got ${items.length} items, first 5:`);
-      for (const item of items.slice(0, 5)) {
-        console.log(`  name=${item.name} isDir=${item.isDirectory} ext=${item.extension} playable=${item.playable} relPath=${item.relPath}`);
-      }
-    } else if ((stats.folders + stats.files) % 100 === 0) {
+    // Log progress every 100 items
+    if ((stats.folders + stats.files) % 100 === 0 && (stats.folders + stats.files) > 0) {
       console.log(`[library] progress: folders=${stats.folders} files=${stats.files} playable=${stats.playable}`);
     }
 
@@ -395,9 +391,10 @@ router.post('/reindex', async (req, res) => {
   try {
     await walk(KOOFR_ROOT, '');
 
-    // Prune stale entries (not touched during this reindex)
+    // Prune entries indexed before this reindex started (previous run's entries)
     const deleted = await db.query(
-      `DELETE FROM music_library_index WHERE indexed_at < NOW() - INTERVAL '5 seconds' RETURNING id`
+      `DELETE FROM music_library_index WHERE indexed_at < $1 RETURNING id`,
+      [reindexStartedAt]
     );
     if (deleted.rowCount > 0) {
       console.log(`[library] pruned ${deleted.rowCount} stale entries`);
