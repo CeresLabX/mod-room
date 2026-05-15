@@ -268,6 +268,18 @@ router.get('/search', async (req, res) => {
   }
 });
 
+router.get('/debug-list', async (req, res) => {
+  if (!email || !password) return res.status(503).json({ error: 'no creds' });
+  try {
+    const items = await webdavList(KOOFR_ROOT);
+    res.json({ count: items.length, items: items.slice(0, 5).map(i => ({
+      name: i.name, isDirectory: i.isDirectory, ext: i.extension, playable: i.playable
+    }))});
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 /**
  * POST /api/library/reindex
  * Rebuilds the library index from WebDAV via recursive walk.
