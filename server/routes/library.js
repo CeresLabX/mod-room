@@ -239,7 +239,7 @@ router.get('/search', async (req, res) => {
 
   try {
     const scope = relPath === '/' ? '' : relPath;
-    const pattern = scope ? `${scope}/%` : '%`;
+    const pattern = scope ? scope + '/%' : '%';
 
     const result = await db.query(
       `SELECT id, name, relative_path, parent_path, type, extension, playable, size
