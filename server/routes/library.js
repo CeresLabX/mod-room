@@ -313,6 +313,18 @@ router.get('/debug-token', (req, res) => {
   res.json({ tokenSet: !!reindexToken, tokenLength: reindexToken ? reindexToken.length : 0, tokenPreview: reindexToken ? reindexToken.slice(0, 4) + '...' : null });
 });
 
+// DEBUG: verify a given token against the server's reindexToken
+router.post('/debug-verify', (req, res) => {
+  const incoming = req.headers['x-reindex-token'] || '';
+  res.json({
+    incomingLength: incoming.length,
+    incomingPreview: incoming.slice(0, 8) + '...',
+    serverLength: reindexToken ? reindexToken.length : 0,
+    serverPreview: reindexToken ? reindexToken.slice(0, 8) + '...' : null,
+    match: incoming === reindexToken
+  });
+});
+
 router.post('/reindex', async (req, res) => {
   const token = req.headers['x-reindex-token'];
   if (!reindexToken || token !== reindexToken) {
