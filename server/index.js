@@ -64,6 +64,8 @@ const io = new Server(server, {
   path: '/socket.io',
 });
 
+app.locals.io = io;
+
 function getRoomClients(roomId) {
   const room = roomSync.getActiveRooms().get(roomId);
   return room ? room.connectedUsers.size : 0;

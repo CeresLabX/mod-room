@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { getDb } = require('../db');
+const roomSync = require('../roomSync');
 
 // Validate UUID format — return 400 if invalid
 function validateUUID(str, res) {
@@ -115,6 +116,105 @@ router.get('/:roomId', async (req, res) => {
   } catch (err) {
     console.error('[/rooms/:roomId GET error]', err.message);
     res.status(500).json({ error: 'Failed to get room', detail: err.message });
+  }
+});
+
+
+// Add item to queue via HTTP fallback. This keeps Library Add working even if
+// Socket.IO/WebSocket is unreliable in the browser. The server still broadcasts
+// the updated queue over Socket.IO for any connected clients.
+router.post('/:roomId/queue', async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const { item, nickname } = req.body || {};
+    const db = getDb();
+
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+    if (!item || typeof item !== 'object') return res.status(400).json({ error: 'item is required' });
+    if (!nickname || typeof nickname !== 'string') return res.status(400).json({ error: 'nickname is required' });
+
+    const safeNickname = sanitize(nickname.trim()).slice(0, 50);
+    if (!safeNickname) return res.status(400).json({ error: 'Invalid nickname' });
+
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const roomRes = uuidRegex.test(roomId)
+      ? await db.query('SELECT * FROM rooms WHERE id = $1', [roomId])
+      : await db.query('SELECT * FROM rooms WHERE room_code = $1', [roomId.toUpperCase()]);
+    if (!roomRes.rows.length) return res.status(404).json({ error: 'Room not found' });
+
+    const room = roomRes.rows[0];
+    const canonicalRoomId = room.id;
+
+    await db.query(`
+      INSERT INTO room_participants (room_id, nickname, is_host, last_seen)
+      VALUES ($1, $2, $3, NOW())
+      ON CONFLICT (room_id, nickname) DO UPDATE SET last_seen = NOW()
+    `, [canonicalRoomId, safeNickname, room.host_nickname === safeNickname]);
+
+    const maxPosRes = await db.query(
+      'SELECT COALESCE(MAX(position), 0) as maxpos FROM queue_items WHERE room_id = $1',
+      [canonicalRoomId]
+    );
+    const newPos = maxPosRes.rows[0].maxpos + 1;
+
+    const insertRes = await db.query(
+      `INSERT INTO queue_items (room_id, title, media_type, url, filename, format, duration, added_by, position)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       RETURNING *`,
+      [
+        canonicalRoomId,
+        sanitize(item.title || item.filename || 'Unknown').slice(0, 500),
+        item.mediaType,
+        item.url,
+        item.filename || null,
+        item.format || null,
+        item.duration || null,
+        safeNickname,
+        newPos,
+      ]
+    );
+    const newItem = insertRes.rows[0];
+
+    const wasIdle = room.playback_status === 'idle' || !room.current_item_id;
+    if (wasIdle) {
+      const roomSyncState = roomSync.getOrCreateActiveRoom(canonicalRoomId);
+      roomSync.updatePlaybackState(roomSyncState, {
+        roomId: canonicalRoomId,
+        currentTrackId: newItem.id,
+        isPlaying: true,
+        positionMsAtLastUpdate: 0,
+        startedByUserId: safeNickname,
+      });
+      await db.query(
+        'UPDATE rooms SET current_item_id = $1, playback_status = $2, playback_timestamp = 0, playback_updated_at = NOW(), last_command_id = $3 WHERE id = $4',
+        [newItem.id, 'playing', roomSyncState.playbackState.lastCommandId, canonicalRoomId]
+      );
+    }
+
+    const queueRes = await db.query(
+      'SELECT * FROM queue_items WHERE room_id = $1 ORDER BY position ASC',
+      [canonicalRoomId]
+    );
+    const queue = queueRes.rows.map(q => ({
+      id: q.id, title: q.title, mediaType: q.media_type, url: q.url,
+      filename: q.filename, format: q.format, duration: q.duration,
+      addedBy: q.added_by, position: q.position,
+    }));
+
+    const io = req.app.locals.io;
+    if (io) {
+      io.to(canonicalRoomId).emit('queue-updated', { queue });
+      if (wasIdle) roomSync.broadcastPlaybackState(io, canonicalRoomId);
+      io.to(canonicalRoomId).emit('activity', {
+        message: `${safeNickname} added "${newItem.title}"`,
+        ts: Date.now(),
+      });
+    }
+
+    res.json({ ok: true, itemId: newItem.id, queue });
+  } catch (err) {
+    console.error('[/rooms/:roomId/queue POST error]', err.message);
+    res.status(500).json({ error: 'Failed to add item', detail: err.message });
   }
 });
 

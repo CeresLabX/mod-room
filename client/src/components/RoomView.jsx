@@ -285,24 +285,48 @@ export default function RoomView({ theme, applyTheme }) {
     return socket;
   }, [joinRoom, roomData?.id, socketRef]);
 
-  const handleAddToQueue = async (item, options = {}) => {
-    const socket = await ensureSocketReady();
-    return new Promise((resolve, reject) => {
-      socket.timeout(8000).emit('add-to-queue', { item }, (err, response) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        if (!response?.ok) {
-          reject(new Error(response?.error || 'Failed to add item'));
-          return;
-        }
-        if (!options.keepOpen) {
-          setShowAddMedia(false);
-        }
-        resolve(response);
-      });
+  const addToQueueViaHttp = useCallback(async (item) => {
+    const targetRoomId = roomData?.id || roomId;
+    console.warn('[queue] Socket add failed or timed out; using HTTP fallback');
+    const res = await axios.post(`/api/rooms/${encodeURIComponent(targetRoomId)}/queue`, {
+      item,
+      nickname,
     });
+    if (!res.data?.ok) {
+      throw new Error(res.data?.error || 'Failed to add item');
+    }
+    if (Array.isArray(res.data.queue)) {
+      handleQueueUpdated({ queue: res.data.queue });
+    }
+    return res.data;
+  }, [handleQueueUpdated, nickname, roomData?.id, roomId]);
+
+  const handleAddToQueue = async (item, options = {}) => {
+    let response;
+    try {
+      const socket = await ensureSocketReady();
+      response = await new Promise((resolve, reject) => {
+        socket.timeout(8000).emit('add-to-queue', { item }, (err, ackResponse) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          if (!ackResponse?.ok) {
+            reject(new Error(ackResponse?.error || 'Failed to add item'));
+            return;
+          }
+          resolve(ackResponse);
+        });
+      });
+    } catch (err) {
+      console.warn('[queue] Socket add failed, trying HTTP fallback:', err?.message || err);
+      response = await addToQueueViaHttp(item);
+    }
+
+    if (!options.keepOpen) {
+      setShowAddMedia(false);
+    }
+    return response;
   };
 
   const handleRemoveFromQueue = (itemId) => {
