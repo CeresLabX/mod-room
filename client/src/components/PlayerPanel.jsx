@@ -45,7 +45,7 @@ export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onP
   const [showFormatInfo, setShowFormatInfo] = useState(false);
 
   const handleEnded = () => {
-    emit('next', {});
+    onNext?.();
   };
 
   const handlePlayerError = (e) => {

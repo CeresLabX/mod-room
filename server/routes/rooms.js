@@ -95,26 +95,29 @@ router.get('/code/:code', async (req, res) => {
   }
 });
 
-// Get room
+// Get room snapshot. Accept either canonical UUID or human room code.
 router.get('/:roomId', async (req, res) => {
   try {
-    if (!validateUUID(req.params.roomId, res)) return;
     const { roomId } = req.params;
     const db = getDb();
 
     if (!db) return res.status(503).json({ error: 'Database not configured' });
 
-    const roomRes = await db.query('SELECT * FROM rooms WHERE id = $1', [roomId]);
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const roomRes = uuidRegex.test(roomId)
+      ? await db.query('SELECT * FROM rooms WHERE id = $1', [roomId])
+      : await db.query('SELECT * FROM rooms WHERE room_code = $1', [roomId.toUpperCase()]);
     if (!roomRes.rows.length) return res.status(404).json({ error: 'Room not found' });
 
     const room = roomRes.rows[0];
+    const canonicalRoomId = room.id;
     const queueRes = await db.query(
       'SELECT * FROM queue_items WHERE room_id = $1 ORDER BY position ASC',
-      [roomId]
+      [canonicalRoomId]
     );
     const usersRes = await db.query(
       'SELECT nickname, is_host FROM room_participants WHERE room_id = $1 ORDER BY last_seen DESC',
-      [roomId]
+      [canonicalRoomId]
     );
 
     res.json({
@@ -279,6 +282,79 @@ router.post('/:roomId/join', async (req, res) => {
   } catch (err) {
     console.error('[/rooms/:roomId/join POST error]', err.message);
     res.status(500).json({ error: 'Failed to join room', detail: err.message });
+  }
+});
+
+
+// Advance to next queue item via HTTP. Socket.IO still broadcasts the update,
+// but this keeps the button reliable even if this browser's socket is stale.
+router.post('/:roomId/next', async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const db = getDb();
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const roomRes = uuidRegex.test(roomId)
+      ? await db.query('SELECT * FROM rooms WHERE id = $1', [roomId])
+      : await db.query('SELECT * FROM rooms WHERE room_code = $1', [roomId.toUpperCase()]);
+    if (!roomRes.rows.length) return res.status(404).json({ error: 'Room not found' });
+
+    const room = roomRes.rows[0];
+    const canonicalRoomId = room.id;
+    const roomSyncState = roomSync.getOrCreateActiveRoom(canonicalRoomId);
+
+    const queueRes = await db.query(
+      'SELECT * FROM queue_items WHERE room_id = $1 ORDER BY position ASC',
+      [canonicalRoomId]
+    );
+    const queueRows = queueRes.rows;
+    const currentIndex = queueRows.findIndex(q => q.id === room.current_item_id);
+    const nextItem = queueRows[currentIndex >= 0 ? currentIndex + 1 : 0];
+
+    let playbackStatus = 'idle';
+    let currentItemId = null;
+    if (nextItem) {
+      currentItemId = nextItem.id;
+      playbackStatus = 'playing';
+      roomSync.updatePlaybackState(roomSyncState, {
+        roomId: canonicalRoomId,
+        currentTrackId: currentItemId,
+        isPlaying: true,
+        positionMsAtLastUpdate: 0,
+      });
+      await db.query(
+        'UPDATE rooms SET current_item_id = $1, playback_status = $2, playback_timestamp = 0, playback_updated_at = NOW(), last_command_id = $3 WHERE id = $4',
+        [currentItemId, playbackStatus, roomSyncState.playbackState.lastCommandId, canonicalRoomId]
+      );
+    } else {
+      roomSync.updatePlaybackState(roomSyncState, {
+        currentTrackId: null,
+        isPlaying: false,
+        positionMsAtLastUpdate: 0,
+      });
+      await db.query(
+        'UPDATE rooms SET current_item_id = NULL, playback_status = $1, playback_timestamp = 0, playback_updated_at = NOW(), last_command_id = $2 WHERE id = $3',
+        [playbackStatus, roomSyncState.playbackState.lastCommandId, canonicalRoomId]
+      );
+    }
+
+    const queue = queueRows.map(q => ({
+      id: q.id, title: q.title, mediaType: q.media_type, url: q.url,
+      filename: q.filename, format: q.format, duration: q.duration,
+      addedBy: q.added_by, position: q.position,
+    }));
+
+    const io = req.app.locals.io;
+    if (io) {
+      io.to(canonicalRoomId).emit('queue-updated', { queue });
+      roomSync.broadcastPlaybackState(io, canonicalRoomId);
+    }
+
+    res.json({ ok: true, queue, currentItemId, playbackStatus });
+  } catch (err) {
+    console.error('[/rooms/:roomId/next POST error]', err.message);
+    res.status(500).json({ error: 'Failed to advance queue', detail: err.message });
   }
 });
 

@@ -68,6 +68,46 @@ export default function RoomView({ theme, applyTheme }) {
     setActivities(a => [...a, { message: `Joined room as "${nickname}"`, type: 'join', ts: Date.now() }]);
   }, [nickname, findCurrentItem]);
 
+
+  const hydrateFromRoomSnapshot = useCallback((room, nextQueue = [], nextUsers = []) => {
+    setRoomData(room);
+    setQueue(nextQueue);
+    setUsers(nextUsers);
+    queueRef.current = nextQueue;
+    usersRef.current = nextUsers;
+
+    const playbackData = {
+      status: room?.playbackStatus || 'idle',
+      itemId: room?.currentItemId || null,
+      timestamp: room?.playbackTimestamp || 0,
+      positionMsAtLastUpdate: (room?.playbackTimestamp || 0) * 1000,
+      serverUpdatedAt: Date.now(),
+      isPlaying: room?.playbackStatus === 'playing',
+    };
+    playbackRef.current = playbackData;
+    setPlayback({ ...playbackData });
+    setCurrentItem(findCurrentItem(nextQueue, room?.currentItemId));
+  }, [findCurrentItem]);
+
+  // HTTP snapshot fallback for refreshes or stale sockets. Socket room-state is
+  // still preferred when it arrives, but the page should not look empty while
+  // waiting for Socket.IO.
+  useEffect(() => {
+    if (!nickname) return;
+    let cancelled = false;
+    async function loadSnapshot() {
+      try {
+        const res = await axios.get(`/api/rooms/${encodeURIComponent(roomId)}`);
+        if (cancelled) return;
+        hydrateFromRoomSnapshot(res.data, res.data.queue || [], res.data.users || []);
+      } catch (err) {
+        console.warn('[room] HTTP snapshot failed:', err?.response?.data?.error || err.message);
+      }
+    }
+    loadSnapshot();
+    return () => { cancelled = true; };
+  }, [hydrateFromRoomSnapshot, nickname, roomId]);
+
   const handlePlaybackUpdate = useCallback((data) => {
     // Conflict detection: ignore stale updates
     if (data.serverUpdatedAt && playbackRef.current.serverUpdatedAt && data.serverUpdatedAt < playbackRef.current.serverUpdatedAt) {
@@ -214,8 +254,28 @@ export default function RoomView({ theme, applyTheme }) {
     emit('seek', { timestamp });
   };
 
-  const handleNext = () => {
-    emit('next', {});
+  const handleNext = async () => {
+    try {
+      const targetRoomId = roomData?.id || roomId;
+      const res = await axios.post(`/api/rooms/${encodeURIComponent(targetRoomId)}/next`);
+      if (!res.data?.ok) throw new Error(res.data?.error || 'Failed to advance queue');
+      const nextQueue = res.data.queue || [];
+      handleQueueUpdated({ queue: nextQueue });
+      playbackRef.current = {
+        ...playbackRef.current,
+        status: res.data.playbackStatus || 'idle',
+        itemId: res.data.currentItemId || null,
+        timestamp: 0,
+        positionMsAtLastUpdate: 0,
+        serverUpdatedAt: Date.now(),
+        isPlaying: res.data.playbackStatus === 'playing',
+      };
+      setPlayback({ ...playbackRef.current });
+      setCurrentItem(findCurrentItem(nextQueue, res.data.currentItemId));
+    } catch (err) {
+      console.warn('[queue] HTTP next failed, trying socket:', err?.message || err);
+      emit('next', {});
+    }
   };
 
   const ensureSocketReady = useCallback(async () => {
