@@ -308,6 +308,11 @@ router.get('/debug-list', async (req, res) => {
  * Rebuilds the library index from WebDAV via recursive walk.
  * Protected by LIBRARY_REINDEX_TOKEN header.
  */
+// DEBUG: check what token the server sees
+router.get('/debug-token', (req, res) => {
+  res.json({ tokenSet: !!reindexToken, tokenLength: reindexToken ? reindexToken.length : 0, tokenPreview: reindexToken ? reindexToken.slice(0, 4) + '...' : null });
+});
+
 router.post('/reindex', async (req, res) => {
   const token = req.headers['x-reindex-token'];
   if (!reindexToken || token !== reindexToken) {
