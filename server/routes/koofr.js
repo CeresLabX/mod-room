@@ -49,7 +49,8 @@ function parsePropfind(xml) {
     const typeMatch = block.match(/<d:getcontenttype>([^<]*)<\/d:getcontenttype>/i);
     const contentType = typeMatch ? typeMatch[1] : '';
 
-    const isCollection = /<d:collection\/?>/i.test(block);
+    // Match <d:collection> or <d:collection ...> (with xmlns or other attrs before >)
+    const isCollection = /<d:collection[^>]*>/i.test(block);
 
     responses.push({ href, displayName, contentLength, contentType, isCollection });
   }

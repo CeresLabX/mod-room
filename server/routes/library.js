@@ -179,8 +179,8 @@ function parsePropfind(xml) {
     const contentLength = lenMatch ? parseInt(lenMatch[1], 10) : 0;
     const typeMatch = block.match(/<D:getcontenttype>([^<]*)<\/D:getcontenttype>/i);
     const contentType = typeMatch ? typeMatch[1] : '';
-    // Directory = has <D:collection/> tag
-    const isCollection = /<D:collection\/?>/i.test(block) || /<d:collection\/?>/i.test(block);
+    // Match <D:collection> or <D:collection ...> with xmlns/other attributes before >
+    const isCollection = /<D:collection[^>]*>/i.test(block) || /<d:collection[^>]*>/i.test(block);
     responses.push({ href, displayName, contentLength, contentType, isCollection });
   }
   return responses;
