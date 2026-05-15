@@ -31,7 +31,8 @@ const PLAYABLE_EXTENSIONS = new Set([
   'MOD','XM','S3M','IT','MPTM','MTM','STM','669',
   'AMF','AMS','DBM','DMF','DSM','FAR','MDL','MED',
   'OKT','PTM','ULT','UMX','DIGI','GDM','IMF','J2B',
-  'PSM','WAV','MP3','OGG','FLAC','M4A',
+  'PSM','C67','DTM','FMT','MO3','MT2','PLM','SFX','STP','SYMMOD',
+  'WAV','MP3','OGG','FLAC','M4A','MID','MIDI',
 ]);
 
 function isPlayable(ext) {

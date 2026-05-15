@@ -223,12 +223,20 @@ export default function RoomView({ theme, applyTheme }) {
       throw new Error('Not connected to server');
     }
     return new Promise((resolve, reject) => {
-      socketRef.current.emit('add-to-queue', { item }, (err) => {
-        if (err) { reject(err); } else { resolve(); }
+      socketRef.current.timeout(8000).emit('add-to-queue', { item }, (err, response) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        if (!response?.ok) {
+          reject(new Error(response?.error || 'Failed to add item'));
+          return;
+        }
+        if (!options.keepOpen) {
+          setShowAddMedia(false);
+        }
+        resolve(response);
       });
-      if (!options.keepOpen) {
-        setShowAddMedia(false);
-      }
     });
   };
 

@@ -332,9 +332,23 @@ io.on('connection', (socket) => {
     }))});
   });
 
-  socket.on('add-to-queue', async ({ item }) => {
-    if (!currentRoom || !currentNickname) return;
+  socket.on('add-to-queue', async ({ item }, ack) => {
+    const reply = (payload) => {
+      if (typeof ack === 'function') ack(payload);
+    };
+
+    if (!currentRoom || !currentNickname) {
+      reply({ ok: false, error: 'Not joined to a room' });
+      return;
+    }
+
     const db = getDb();
+    if (!db) {
+      reply({ ok: false, error: 'Database not available' });
+      return;
+    }
+
+    try {
 
     const maxPosRes = await db.query(
       'SELECT COALESCE(MAX(position), 0) as maxpos FROM queue_items WHERE room_id = $1',
@@ -397,6 +411,11 @@ io.on('connection', (socket) => {
       message: `${currentNickname} added "${newItem.title}"`,
       ts: Date.now(),
     });
+    reply({ ok: true, itemId: newItem.id });
+    } catch (err) {
+      console.error('[queue] add-to-queue failed:', err);
+      reply({ ok: false, error: err.message || 'Failed to add item' });
+    }
   });
 
   socket.on('remove-from-queue', async ({ itemId }) => {

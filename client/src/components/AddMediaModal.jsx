@@ -3,7 +3,13 @@ import axios from 'axios';
 import LibraryBrowser from './LibraryBrowser.jsx';
 import { extractYouTubeId, isYouTubeUrl } from '../utils/mediaHandler.js';
 
-const ALLOWED_AUDIO = ['mp3', 'wav', 'ogg', 'midi', 'mid', 'mod', 'xm', 's3m', 'it'];
+const ALLOWED_AUDIO = [
+  'mp3', 'wav', 'ogg', 'flac', 'm4a', 'midi', 'mid',
+  'mod', 'xm', 's3m', 'it', 'mptm', 'mtm', 'stm', '669',
+  'amf', 'ams', 'dbm', 'dmf', 'dsm', 'far', 'mdl', 'med',
+  'okt', 'ptm', 'ult', 'umx', 'digi', 'gdm', 'imf', 'j2b', 'psm',
+  'c67', 'dtm', 'fmt', 'mo3', 'mt2', 'plm', 'sfx', 'stp', 'symmod',
+];
 const ALLOWED_VIDEO = ['mp4', 'webm', 'mpeg'];
 const ALL_ALLOWED = [...ALLOWED_AUDIO, ...ALLOWED_VIDEO];
 const MAX_SIZE_BYTES = 100 * 1024 * 1024;

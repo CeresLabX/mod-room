@@ -327,21 +327,6 @@ export const FORMAT_DATA = [
     engine: 'libopenmpt',
   },
   {
-    extension: 'j2b',
-    name: 'FamiTracker Backup',
-    description: 'FamiTracker is a popular modern tracker for NES/GameBoy music. .j2b is its project backup format.',
-    whyItMatters: [
-      'Modern chiptune tracker format',
-      'NES and GameBoy sound hardware emulation',
-    ],
-    whyForMusic: 'J2B files preserve FamiTracker projects — not a libopenmpt-supported format.',
-    references: [
-      { label: 'FamiTracker', url: 'https://famitracker.com/' },
-    ],
-    isExperimental: true,
-    engine: 'unsupported',
-  },
-  {
     extension: 'ams',
     name: 'AMS Module',
     description: 'Advanced Music System format — an early Windows tracker format.',
@@ -394,16 +379,117 @@ export const FORMAT_DATA = [
     isExperimental: false,
     engine: 'libopenmpt',
   },
+
+  {
+    extension: 'j2b',
+    name: 'Jazz Jackrabbit 2 Music',
+    description: 'Tracker-style music format used by Jazz Jackrabbit 2. Readable by OpenMPT/libopenmpt.',
+    whyItMatters: ['Classic game music format', 'Supported by libopenmpt for playback'],
+    whyForMusic: 'J2B files preserve the energetic tracker soundtrack style of late-90s PC games.',
+    references: [{ label: 'OpenMPT module formats', url: 'https://wiki.openmpt.org/Manual:_Module_formats' }],
+    isExperimental: false,
+    engine: 'libopenmpt',
+  },
+  {
+    extension: 'c67',
+    name: 'Composer 670 / CDFM',
+    description: 'Legacy tracker import format readable by OpenMPT/libopenmpt.',
+    whyItMatters: ['Rare historical tracker format', 'Included in OpenMPT import support'],
+    whyForMusic: 'C67 files can contain compact vintage tracker compositions.',
+    references: [{ label: 'OpenMPT module formats', url: 'https://wiki.openmpt.org/Manual:_Module_formats' }],
+    isExperimental: false,
+    engine: 'libopenmpt',
+  },
+  {
+    extension: 'dtm',
+    name: 'Digital Tracker / Digital Home Studio',
+    description: 'Legacy tracker format readable by OpenMPT/libopenmpt.',
+    whyItMatters: ['Part of the broader tracker ecosystem', 'Readable via OpenMPT import support'],
+    whyForMusic: 'DTM files may hold lesser-known demo/game music modules.',
+    references: [{ label: 'OpenMPT module formats', url: 'https://wiki.openmpt.org/Manual:_Module_formats' }],
+    isExperimental: false,
+    engine: 'libopenmpt',
+  },
+  {
+    extension: 'fmt',
+    name: 'Davey W. Taylor FM Tracker',
+    description: 'FM tracker format readable by OpenMPT/libopenmpt.',
+    whyItMatters: ['FM-synthesis tracker history', 'Readable by OpenMPT import support'],
+    whyForMusic: 'FMT files offer a distinct FM tracker sound palette.',
+    references: [{ label: 'OpenMPT module formats', url: 'https://wiki.openmpt.org/Manual:_Module_formats' }],
+    isExperimental: false,
+    engine: 'libopenmpt',
+  },
+  {
+    extension: 'mo3',
+    name: 'MO3 Compressed Module',
+    description: 'Compressed module container readable by OpenMPT/libopenmpt.',
+    whyItMatters: ['Common compressed module container', 'Preserves IT/XM/S3M/MOD-style tracker data with compressed samples'],
+    whyForMusic: 'MO3 files are often full tracker songs packed for smaller distribution.',
+    references: [{ label: 'OpenMPT module formats', url: 'https://wiki.openmpt.org/Manual:_Module_formats' }],
+    isExperimental: false,
+    engine: 'libopenmpt',
+  },
+  {
+    extension: 'mt2',
+    name: 'MadTracker 2 Module',
+    description: 'MadTracker 2 format readable by OpenMPT/libopenmpt.',
+    whyItMatters: ['Windows tracker-era format', 'Readable by OpenMPT import support'],
+    whyForMusic: 'MT2 files can contain polished late tracker-era compositions.',
+    references: [{ label: 'OpenMPT module formats', url: 'https://wiki.openmpt.org/Manual:_Module_formats' }],
+    isExperimental: false,
+    engine: 'libopenmpt',
+  },
+  {
+    extension: 'plm',
+    name: 'Disorder Tracker 2 Module',
+    description: 'Disorder Tracker 2 format readable by OpenMPT/libopenmpt.',
+    whyItMatters: ['Obscure tracker format', 'Readable by OpenMPT import support'],
+    whyForMusic: 'PLM files broaden the playable archive beyond mainstream tracker formats.',
+    references: [{ label: 'OpenMPT module formats', url: 'https://wiki.openmpt.org/Manual:_Module_formats' }],
+    isExperimental: false,
+    engine: 'libopenmpt',
+  },
+  {
+    extension: 'sfx',
+    name: 'SoundFX / MultiMedia Sound',
+    description: 'SoundFX module format readable by OpenMPT/libopenmpt.',
+    whyItMatters: ['Amiga-era tracker format', 'Readable by OpenMPT import support'],
+    whyForMusic: 'SFX files capture a less common branch of Amiga module music.',
+    references: [{ label: 'OpenMPT module formats', url: 'https://wiki.openmpt.org/Manual:_Module_formats' }],
+    isExperimental: false,
+    engine: 'libopenmpt',
+  },
+  {
+    extension: 'stp',
+    name: 'Soundtracker Pro II',
+    description: 'Soundtracker Pro II format readable by OpenMPT/libopenmpt.',
+    whyItMatters: ['SoundTracker-family historical format', 'Readable by OpenMPT import support'],
+    whyForMusic: 'STP files preserve early tracker-style compositions.',
+    references: [{ label: 'OpenMPT module formats', url: 'https://wiki.openmpt.org/Manual:_Module_formats' }],
+    isExperimental: false,
+    engine: 'libopenmpt',
+  },
+  {
+    extension: 'symmod',
+    name: 'Symphonie / Symphonie Pro',
+    description: 'Symphonie module format readable by OpenMPT/libopenmpt.',
+    whyItMatters: ['Symphonie tracker format support', 'Readable by OpenMPT import support'],
+    whyForMusic: 'SYMMOD files can contain rich Amiga-era tracker music.',
+    references: [{ label: 'OpenMPT module formats', url: 'https://wiki.openmpt.org/Manual:_Module_formats' }],
+    isExperimental: false,
+    engine: 'libopenmpt',
+  },
 ];
 
 export const LIBOPENMPT_FORMATS = new Set([
   'mod', 'xm', 'it', 's3m', 'mptm', 'mtm', 'med', '669', 'dbm', 'stm', 'okt', 'amf', 'dmf', 'psm', 'ptm', 'ult',
-  'ams', 'dsm', 'far', 'mdl', 'umx', 'gdm', 'imf', 'digi',
+  'ams', 'dsm', 'far', 'mdl', 'umx', 'gdm', 'imf', 'digi', 'j2b', 'c67', 'dtm', 'fmt', 'mo3', 'mt2', 'plm', 'sfx', 'stp', 'symmod',
 ]);
 
-export const EXPERIMENTAL_FORMATS = new Set(['j2b']);
+export const EXPERIMENTAL_FORMATS = new Set(['ahx', 'hvl']);
 
-export const AHX_FORMATS = new Set(['ahx', 'hvl']);
+export const AHX_FORMATS = new Set([]);
 
 export const MODPLAYER_FORMATS = new Set(['mod']);
 

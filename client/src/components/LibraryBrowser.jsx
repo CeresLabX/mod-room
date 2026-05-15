@@ -17,13 +17,15 @@ const PLAYABLE_EXTENSIONS = new Set([
   'MOD','XM','S3M','IT','MPTM','MTM','STM','669',
   'AMF','AMS','DBM','DMF','DSM','FAR','MDL','MED',
   'OKT','PTM','ULT','UMX','DIGI','GDM','IMF','J2B',
-  'WAV','MP3','OGG','FLAC','M4A',
+  'PSM','C67','DTM','FMT','MO3','MT2','PLM','SFX','STP','SYMMOD',
+  'WAV','MP3','OGG','FLAC','M4A','MID','MIDI',
 ]);
 
 const TRACKER_EXTENSIONS = new Set([
   'MOD','XM','S3M','IT','MPTM','MTM','STM','669',
   'AMF','AMS','DBM','DMF','DSM','FAR','MDL','MED',
   'OKT','PTM','ULT','UMX','DIGI','GDM','IMF','J2B',
+  'PSM','C67','DTM','FMT','MO3','MT2','PLM','SFX','STP','SYMMOD',
 ]);
 
 const LIBRARY_ROOT = '/';
@@ -142,15 +144,18 @@ export default function LibraryBrowser({ onAdd }) {
     loadFolder(path);
   }
 
-  function handleItemClick(item) {
+  async function handleItemClick(item) {
     if (item.type === 'folder') {
       navigateToFolder(item.relativePath);
-    } else {
-      if (!item.playable) return;
-      setAddError('');
-      setAddedPath(item.relativePath);
-      const proxyUrl = buildFileUrl(item.relativePath);
-      const result = onAdd({
+      return;
+    }
+
+    if (!item.playable) return;
+    setAddError('');
+    setAddedPath('');
+    const proxyUrl = buildFileUrl(item.relativePath);
+    try {
+      await onAdd({
         url: proxyUrl,
         title: item.name,
         filename: item.name,
@@ -158,31 +163,38 @@ export default function LibraryBrowser({ onAdd }) {
         format: item.extension || getExtension(item.name),
         duration: 0,
       });
-      // If onAdd returns a rejected Promise, show error
-      if (result && typeof result.then === 'function') {
-        result.catch(() => setAddError('Failed to add — check connection'));
-      }
+      setAddedPath(item.relativePath);
+    } catch (err) {
+      setAddError(err?.message || 'Failed to add — check connection');
+    } finally {
       setSelectedFile(null);
     }
   }
 
-  function handleAddAll() {
+  async function handleAddAll() {
     const playableFiles = items.filter(i => i.type === 'file' && i.playable);
     if (playableFiles.length === 0) return;
     setAddAllLoading(true);
-    for (const file of playableFiles) {
-      const proxyUrl = buildFileUrl(file.relativePath);
-      onAdd({
-        url: proxyUrl,
-        title: file.name,
-        filename: file.name,
-        mediaType: 'audio',
-        format: file.extension || getExtension(file.name),
-        duration: 0,
-      });
+    setAddError('');
+    setAddedPath('');
+    try {
+      for (const file of playableFiles) {
+        const proxyUrl = buildFileUrl(file.relativePath);
+        await onAdd({
+          url: proxyUrl,
+          title: file.name,
+          filename: file.name,
+          mediaType: 'audio',
+          format: file.extension || getExtension(file.name),
+          duration: 0,
+        });
+      }
+      setAddedPath('__add_all__');
+    } catch (err) {
+      setAddError(err?.message || 'Failed to add all — check connection');
+    } finally {
+      setAddAllLoading(false);
     }
-    setAddedPath('__add_all__');
-    setAddAllLoading(false);
   }
 
   const playableCount = items.filter(i => i.type === 'file' && i.playable).length;

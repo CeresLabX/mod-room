@@ -106,13 +106,19 @@ router.get('/list', async (req, res) => {
       // Detect format from extension
       const ext = name.split('.').pop().toUpperCase();
       // Comprehensive tracker format list — must match LibraryBrowser.jsx TRACKER_EXTENSIONS
-      const TRACKER_FORMATS = ['MOD','XM','S3M','IT','MPTM','MTM','STM','669',
-        'AMF','AMS','DBM','DMF','DSM','FAR','MDL','MED','OKT','PTM','ULT','UMX',
-        'DIGI','GDM','IMF','J2B'];
-      const ALL_PLAYABLE = ['MOD','XM','S3M','IT','MPTM','MTM','STM','669',
-        'AMF','AMS','DBM','DMF','DSM','FAR','MDL','MED','OKT','PTM','ULT','UMX',
-        'DIGI','GDM','IMF','J2B',
-        'WAV','MP3','OGG','FLAC','M4A'];
+      const TRACKER_FORMATS = [
+        'MOD','XM','S3M','IT','MPTM','MTM','STM','669',
+  'AMF','AMS','DBM','DMF','DSM','FAR','MDL','MED',
+  'OKT','PTM','ULT','UMX','DIGI','GDM','IMF','J2B',
+  'PSM','C67','DTM','FMT','MO3','MT2','PLM','SFX','STP','SYMMOD'
+      ];
+      const ALL_PLAYABLE = [
+        'MOD','XM','S3M','IT','MPTM','MTM','STM','669',
+  'AMF','AMS','DBM','DMF','DSM','FAR','MDL','MED',
+  'OKT','PTM','ULT','UMX','DIGI','GDM','IMF','J2B',
+  'PSM','C67','DTM','FMT','MO3','MT2','PLM','SFX','STP','SYMMOD',
+        'WAV','MP3','OGG','FLAC','M4A','MID','MIDI'
+      ];
       const isTracker = TRACKER_FORMATS.includes(ext);
       const isPlayable = ALL_PLAYABLE.includes(ext);
 
