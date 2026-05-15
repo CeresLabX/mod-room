@@ -145,6 +145,8 @@ async function webdavList(webdavPath) {
       ? absPath.slice(KOOFR_ROOT.length)
       : absPath;
     const relClean = relPath.replace(/^\//, '').replace(/\/$/, '');
+    // Skip the directory's own entry (when empty dir returns itself)
+    if (!relClean) continue;
 
     // Determine name
     const name = item.displayName || relClean.split('/').pop() || '';
