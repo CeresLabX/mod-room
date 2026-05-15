@@ -77,6 +77,7 @@ export default function LibraryBrowser({ onAdd }) {
   const [searchLoading, setSearchLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [addedPath, setAddedPath] = useState('');
+  const [addingPath, setAddingPath] = useState('');
   const [addError, setAddError] = useState('');
   const [addAllLoading, setAddAllLoading] = useState(false);
 
@@ -87,6 +88,7 @@ export default function LibraryBrowser({ onAdd }) {
   // Load folder contents
   const clearAddFeedback = useCallback(() => {
     setAddedPath('');
+    setAddingPath('');
     setAddError('');
   }, []);
 
@@ -150,9 +152,10 @@ export default function LibraryBrowser({ onAdd }) {
       return;
     }
 
-    if (!item.playable) return;
+    if (!item.playable || addingPath) return;
     setAddError('');
     setAddedPath('');
+    setAddingPath(item.relativePath);
     const proxyUrl = buildFileUrl(item.relativePath);
     try {
       await onAdd({
@@ -167,6 +170,7 @@ export default function LibraryBrowser({ onAdd }) {
     } catch (err) {
       setAddError(err?.message || 'Failed to add — check connection');
     } finally {
+      setAddingPath('');
       setSelectedFile(null);
     }
   }
@@ -177,6 +181,7 @@ export default function LibraryBrowser({ onAdd }) {
     setAddAllLoading(true);
     setAddError('');
     setAddedPath('');
+    setAddingPath('__add_all__');
     try {
       for (const file of playableFiles) {
         const proxyUrl = buildFileUrl(file.relativePath);
@@ -193,6 +198,7 @@ export default function LibraryBrowser({ onAdd }) {
     } catch (err) {
       setAddError(err?.message || 'Failed to add all — check connection');
     } finally {
+      setAddingPath('');
       setAddAllLoading(false);
     }
   }
@@ -327,10 +333,15 @@ export default function LibraryBrowser({ onAdd }) {
               key={file.id || file.relativePath}
               className={`koofr-item ${selectedFile?.relativePath === file.relativePath ? 'selected' : ''}`}
               onClick={() => handleItemClick(file)}
+              style={{ opacity: addingPath && addingPath !== file.relativePath ? 0.55 : 1 }}
+              title={addingPath === file.relativePath ? 'Adding to playlist...' : 'Click to add to playlist'}
             >
-              <span style={{ fontSize: 14 }}>🎵</span>
+              <span style={{ fontSize: 14 }}>{addingPath === file.relativePath ? '⏳' : '🎵'}</span>
               <span className="koofr-name">{file.name}</span>
-              <span className={`badge ${getBadgeClass(file.name)}`} style={{ marginLeft: 'auto' }}>
+              {addingPath === file.relativePath && (
+                <span style={{ marginLeft: 'auto', color: 'var(--accent)', fontSize: 'var(--font-size-xs)' }}>ADDING...</span>
+              )}
+              <span className={`badge ${getBadgeClass(file.name)}`} style={{ marginLeft: addingPath === file.relativePath ? 8 : 'auto' }}>
                 {getExtension(file.name)}
               </span>
               {file.size > 0 && (
