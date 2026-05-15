@@ -127,6 +127,14 @@ async function webdavList(webdavPath) {
   const xml = await response.text();
   const responses = parsePropfind(xml);
 
+  // DEBUG: log first few raw responses for MOD folder
+  if (webdavPath.includes('/MOD')) {
+    console.log(`[webdavList] ${webdavPath}: ${responses.length} raw responses`);
+    for (const r of responses.slice(0, 3)) {
+      console.log(`  raw: href=${r.href} isCollection=${r.isCollection}`);
+    }
+  }
+
   const items = [];
   for (const item of responses) {
     if (!item.href || item.href === `${webdavPath}/` || item.href === webdavPath) continue;
