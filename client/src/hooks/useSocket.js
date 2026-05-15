@@ -1,9 +1,9 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { io } from 'socket.io-client';
 
-const SOCKET_URL = import.meta.env.PROD
-  ? window.location.origin
-  : 'http://localhost:3001';
+// Always use the current origin — works in dev (Vite proxy), staging, and production
+// without relying on NODE_ENV being set correctly at build time.
+const SOCKET_URL = window.location.origin;
 
 export function useSocket(handlers) {
   const socketRef = useRef(null);

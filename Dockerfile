@@ -11,7 +11,7 @@ COPY server/ ./server/
 
 # Copy client source and build (vite outputs to server/public)
 COPY client/ ./client/
-RUN cd /app/client && npm install && NODE_ENV=development npm run build
+RUN cd /app/client && npm install && NODE_ENV=production npm run build
 
 # vite outputs to /app/server/public — server runs from /app/server, serve from /app/server/public
 # (no need to copy to /app/public)
