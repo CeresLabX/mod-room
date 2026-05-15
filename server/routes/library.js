@@ -127,31 +127,24 @@ async function webdavList(webdavPath) {
   const xml = await response.text();
   const responses = parsePropfind(xml);
 
-  // DEBUG: log raw responses for MOD and 669 folders
-  if (webdavPath.includes('/MOD') || webdavPath.includes('/669')) {
-    console.log(`[webdavList] ${webdavPath}: ${responses.length} raw responses`);
-    for (const r of responses.slice(0, 3)) {
-      console.log(`  raw: href=${r.href} isCollection=${r.isCollection}`);
-    }
-  } else if (responses.length > 0) {
-    // Log non-MOD, non-669 calls that have items but are not root
-    const pathParts = webdavPath.split('/').filter(Boolean);
-    if (pathParts.length >= 3) { // deeper than /Vectrix/public/X
-      console.log(`[webdavList] ${webdavPath}: ${responses.length} items`);
-    }
-  }
+  // No debug logging in production
+  void responses;
 
   const items = [];
   for (const item of responses) {
-    if (!item.href || item.href === `${webdavPath}/` || item.href === webdavPath) continue;
-
+    if (!item.href) continue;
     // Strip /dav/Koofr prefix to get absolute Koofr path
     const absPath = item.href.replace(/^\/dav\/Koofr/, '');
+    // Normalize: remove trailing slashes
+    const absPathNorm = absPath.replace(/\/$/, '');
+    const webdavPathNorm = webdavPath.replace(/\/$/, '');
+    // Skip the directory's own entry (e.g. PROPFIND on /669 returns /669 as an item)
+    if (absPathNorm === webdavPathNorm) continue;
     const relPath = absPath.startsWith(KOOFR_ROOT)
       ? absPath.slice(KOOFR_ROOT.length)
       : absPath;
     const relClean = relPath.replace(/^\//, '').replace(/\/$/, '');
-    // Skip the directory's own entry (when empty dir returns itself)
+    // Skip if relClean is empty (shouldn't happen after above check but be safe)
     if (!relClean) continue;
 
     // Determine name
