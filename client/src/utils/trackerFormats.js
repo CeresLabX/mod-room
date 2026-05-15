@@ -281,12 +281,127 @@ export const FORMAT_DATA = [
     isExperimental: false,
     engine: 'libopenmpt',
   },
+  {
+    extension: 'digi',
+    name: 'DigiBooster Module',
+    description: 'Format from DigiBooster, an Amiga tracker known for high-quality mixing and 32-channel support with digital samples.',
+    whyItMatters: [
+      'High-quality Amiga tracker format',
+      '32 channels of digital audio',
+    ],
+    whyForMusic: 'DigiBooster modules are known for their rich, layered sound.',
+    references: [
+      { label: 'DigiBooster on ModArchive', url: 'https://modarchive.org/' },
+    ],
+    isExperimental: false,
+    engine: 'libopenmpt',
+  },
+  {
+    extension: 'gdm',
+    name: 'General Digital Music',
+    description: 'General Digital Music format — a versatile tracker format used by various DOS trackers.',
+    whyItMatters: [
+      'Flexible multi-format tracker',
+      'Supports digital samples and standard tracker features',
+    ],
+    whyForMusic: 'GDM files represent a broad range of late-90s DOS tracker compositions.',
+    references: [
+      { label: 'GDM on ModArchive', url: 'https://modarchive.org/' },
+    ],
+    isExperimental: false,
+    engine: 'libopenmpt',
+  },
+  {
+    extension: 'imf',
+    name: 'Imago Orpheus Module',
+    description: 'Format from Imago Orpheus, a DOS tracker that supported 32 channels and digital samples.',
+    whyItMatters: [
+      'DOS-era tracker with 32-channel support',
+      'Part of the competitive mid-90s tracker scene',
+    ],
+    whyForMusic: 'IMF files capture the creative output of the DOS tracker community.',
+    references: [
+      { label: 'IMF on ModArchive', url: 'https://modarchive.org/' },
+    ],
+    isExperimental: false,
+    engine: 'libopenmpt',
+  },
+  {
+    extension: 'j2b',
+    name: 'FamiTracker Backup',
+    description: 'FamiTracker is a popular modern tracker for NES/GameBoy music. .j2b is its project backup format.',
+    whyItMatters: [
+      'Modern chiptune tracker format',
+      'NES and GameBoy sound hardware emulation',
+    ],
+    whyForMusic: 'J2B files preserve FamiTracker projects — not a libopenmpt-supported format.',
+    references: [
+      { label: 'FamiTracker', url: 'https://famitracker.com/' },
+    ],
+    isExperimental: true,
+    engine: 'unsupported',
+  },
+  {
+    extension: 'ams',
+    name: 'AMS Module',
+    description: 'Advanced Music System format — an early Windows tracker format.',
+    whyItMatters: ['Early Windows tracker format', 'Part of the late-90s tracker evolution'],
+    whyForMusic: 'AMS modules capture music from the early Windows tracker era.',
+    references: [{ label: 'AMS on ModArchive', url: 'https://modarchive.org/' }],
+    isExperimental: false,
+    engine: 'libopenmpt',
+  },
+  {
+    extension: 'dsm',
+    name: 'DSynth Module',
+    description: 'Format from the DSynth tracker — a Windows tracker supporting digital samples.',
+    whyItMatters: ['Windows tracker format', 'Part of the early NT-era tracker tools'],
+    whyForMusic: 'DSMs preserve music from early Windows tracker composers.',
+    references: [{ label: 'DSM on ModArchive', url: 'https://modarchive.org/' }],
+    isExperimental: false,
+    engine: 'libopenmpt',
+  },
+  {
+    extension: 'far',
+    name: 'Farandole Tracker',
+    description: 'Format from Farandole Composer, a Windows tracker popular in the late 90s.',
+    whyItMatters: ['Well-regarded Windows tracker', 'Supported 32 channels'],
+    whyForMusic: 'FAR modules are known for their creative compositions from the late 90s.',
+    references: [{ label: 'FAR on ModArchive', url: 'https://modarchive.org/' }],
+    isExperimental: false,
+    engine: 'libopenmpt',
+  },
+  {
+    extension: 'mdl',
+    name: 'MDL Module',
+    description: 'Digitrakker format — a popular DOS tracker format supporting digital samples.',
+    whyItMatters: ['Early DOS tracker with digital sample support', 'Part of the pre-AIFF DOS era'],
+    whyForMusic: 'MDL files contain early examples of digital audio in trackers.',
+    references: [{ label: 'MDL on ModArchive', url: 'https://modarchive.org/' }],
+    isExperimental: false,
+    engine: 'libopenmpt',
+  },
+  {
+    extension: 'umx',
+    name: 'Unreal Music Package',
+    description: 'Music format used by Unreal Engine 1 games. Based on standard tracker formats.',
+    whyItMatters: ['Game music format from Unreal Engine 1', 'Contains notable game soundtracks'],
+    whyForMusic: 'UMX files often contain full-length compositions from classic Unreal Engine games.',
+    references: [
+      { label: 'UMX on ModArchive', url: 'https://modarchive.org/' },
+      { label: 'Unreal Engine documentation', url: 'https://docs.unrealengine.com/' },
+    ],
+    isExperimental: false,
+    engine: 'libopenmpt',
+  },
 ];
 
 export const LIBOPENMPT_FORMATS = new Set([
   'mod', 'xm', 'it', 's3m', 'mptm', 'mtm', 'med', '669', 'dbm', 'stm', 'okt', 'amf', 'dmf', 'psm', 'ptm', 'ult',
-  'ams', 'dsm', 'far', 'mdl', 'umx',
+  'ams', 'dsm', 'far', 'mdl', 'umx', 'gdm', 'imf', 'digi',
 ]);
+
+export const EXPERIMENTAL_FORMATS = new Set(['j2b']);
 
 export const AHX_FORMATS = new Set(['ahx', 'hvl']);
 

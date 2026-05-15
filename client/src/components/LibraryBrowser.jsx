@@ -16,13 +16,14 @@ import React, { useState, useEffect, useCallback } from 'react';
 const PLAYABLE_EXTENSIONS = new Set([
   'MOD','XM','S3M','IT','MPTM','MTM','STM','669',
   'AMF','AMS','DBM','DMF','DSM','FAR','MDL','MED',
-  'OKT','PTM','ULT','UMX','WAV','MP3','OGG','FLAC','M4A',
+  'OKT','PTM','ULT','UMX','DIGI','GDM','IMF','J2B',
+  'WAV','MP3','OGG','FLAC','M4A',
 ]);
 
 const TRACKER_EXTENSIONS = new Set([
   'MOD','XM','S3M','IT','MPTM','MTM','STM','669',
   'AMF','AMS','DBM','DMF','DSM','FAR','MDL','MED',
-  'OKT','PTM','ULT','UMX',
+  'OKT','PTM','ULT','UMX','DIGI','GDM','IMF','J2B',
 ]);
 
 const LIBRARY_ROOT = '/';
