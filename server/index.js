@@ -9,6 +9,7 @@ const { initDb, getDb } = require('./db');
 const roomRoutes = require('./routes/rooms');
 const uploadRoutes = require('./routes/upload');
 const koofrRoutes = require('./routes/koofr');
+const libraryRoutes = require('./routes/library');
 const roomSync = require('./roomSync');
 
 const app = express();
@@ -40,6 +41,7 @@ app.use('/uploads', express.static(UPLOAD_DIR));
 app.use('/api/rooms', roomRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/koofr', koofrRoutes);
+app.use('/api/library', libraryRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => res.json({ status: 'ok', ts: Date.now() }));

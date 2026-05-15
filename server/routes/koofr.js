@@ -15,8 +15,8 @@ const {
   KOOFR_BASE_URL: baseUrl = 'https://app.koofr.net/dav/Koofr',
 } = process.env;
 
-// Allowed path root — must be inside /public/music/
-const KOOFR_ROOT = '/public/music/mod';
+// Allowed path root — Koofr filesystem root is /Vectrix/public/
+const KOOFR_ROOT = '/Vectrix/public';
 
 if (!email || !password) {
   console.warn('[koofr] KOOFR_EMAIL / KOOFR_PASSWORD not set — Koofr browsing disabled');
@@ -103,8 +103,10 @@ router.get('/list', async (req, res) => {
 
       // Detect format from extension
       const ext = name.split('.').pop().toUpperCase();
-      const MOD_FORMATS = ['MOD', 'XM', 'S3M', 'IT', 'AHX', 'MPT', 'MED', 'MTM', '669', 'ULT', 'STM', 'OKT'];
-      const isTracker = MOD_FORMATS.includes(ext);
+      const TRACKER_FORMATS = ['MOD','XM','S3M','IT','AHX','MPT','MED','MTM','669','ULT','STM','OKT'];
+      const ALL_PLAYABLE = ['MOD','XM','S3M','IT','MPTM','MTM','STM','669','AMF','AMS','DBM','DMF','DSM','FAR','MDL','MED','OKT','PTM','ULT','UMX','WAV','MP3','OGG','FLAC','M4A'];
+      const isTracker = TRACKER_FORMATS.includes(ext);
+      const isPlayable = ALL_PLAYABLE.includes(ext);
 
       files.push({
         name,
@@ -114,6 +116,7 @@ router.get('/list', async (req, res) => {
         isDirectory: item.isCollection,
         format: ext,
         isTracker,
+        isPlayable,
       });
     }
 

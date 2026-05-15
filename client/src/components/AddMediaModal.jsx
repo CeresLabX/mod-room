@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback } from 'react';
 import axios from 'axios';
-import KoofrBrowser from './KoofrBrowser.jsx';
+import LibraryBrowser from './LibraryBrowser.jsx';
 import { extractYouTubeId, isYouTubeUrl } from '../utils/mediaHandler.js';
 
 const ALLOWED_AUDIO = ['mp3', 'wav', 'ogg', 'midi', 'mid', 'mod', 'xm', 's3m', 'it'];
@@ -153,7 +153,7 @@ export default function AddMediaModal({ onAdd, onClose }) {
             className={`tab ${tab === 'koofr' ? 'active' : ''}`}
             onClick={() => setTab('koofr')}
           >
-            KOOFR
+            LIBRARY
           </button>
         </div>
 
@@ -221,12 +221,12 @@ export default function AddMediaModal({ onAdd, onClose }) {
         )}
 
         {tab === 'koofr' && (
-          <KoofrBrowser onAdd={(item) => onAdd(item, { keepOpen: true })} />
+          <LibraryBrowser onAdd={(item) => onAdd(item, { keepOpen: true })} />
         )}
 
         <div className="format-note">
           <strong>Supported formats:</strong><br />
-          Audio: MP3, WAV, OGG, MIDI, MOD, XM, S3M, IT<br />
+          Audio: MP3, WAV, OGG, FLAC, M4A, MIDI, MOD/XM/S3M/IT/MPTM and more<br />
           Video: MP4, WebM, MPEG<br />
           URLs: YouTube links or direct audio/video URLs
         </div>

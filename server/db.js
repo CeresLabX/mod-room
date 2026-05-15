@@ -75,6 +75,27 @@ async function runMigrations() {
 
   await db.query(`CREATE INDEX IF NOT EXISTS idx_rooms_updated_at ON rooms(updated_at);`);
 
+  // music_library_index table for WebDAV library browser
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS music_library_index (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      name TEXT NOT NULL,
+      relative_path TEXT NOT NULL UNIQUE,
+      parent_path TEXT NOT NULL,
+      type TEXT NOT NULL CHECK (type IN ('folder', 'file')),
+      extension TEXT,
+      playable BOOLEAN NOT NULL DEFAULT FALSE,
+      size BIGINT,
+      modified_at TIMESTAMPTZ,
+      indexed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_lib_parent_path ON music_library_index(parent_path);`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_lib_type ON music_library_index(type);`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_lib_playable ON music_library_index(playable);`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_lib_name_lower ON music_library_index(lower(name));`);
+
   console.log('[db] migrations complete');
 }
 

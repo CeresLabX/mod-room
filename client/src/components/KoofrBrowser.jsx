@@ -5,10 +5,11 @@
 
 import React, { useState, useEffect } from 'react';
 
-const MOD_FORMATS = new Set(['MOD', 'XM', 'S3M', 'IT', 'AHX', 'MPT', 'MED', 'MTM', '669', 'ULT', 'STM', 'OKT']);
+const MOD_FORMATS = new Set(['MOD', 'XM', 'S3M', 'IT', 'MPTM', 'MTM', 'STM', '669', 'AMF', 'AMS', 'DBM', 'DMF', 'DSM', 'FAR', 'MDL', 'MED', 'OKT', 'PTM', 'ULT', 'UMX']);
+const PLAYABLE_FORMATS = new Set(['MOD','XM','S3M','IT','MPTM','MTM','STM','669','AMF','AMS','DBM','DMF','DSM','FAR','MDL','MED','OKT','PTM','ULT','UMX','WAV','MP3','OGG','FLAC','M4A']);
 
 // The root path for Koofr browsing — users cannot navigate above this.
-const KOOFR_ROOT = '/public/music/mod';
+const KOOFR_ROOT = '/Vectrix/public';
 
 function formatSize(bytes) {
   if (!bytes) return '';
@@ -20,7 +21,7 @@ function formatSize(bytes) {
 function getBadgeClass(name) {
   const ext = name.split('.').pop().toUpperCase();
   if (MOD_FORMATS.has(ext)) return 'badge-mod';
-  if (['MP3', 'WAV', 'OGG'].includes(ext)) return 'badge-audio';
+  if (['MP3', 'WAV', 'OGG', 'FLAC', 'M4A'].includes(ext)) return 'badge-audio';
   if (['MID', 'MIDI'].includes(ext)) return 'badge-midi';
   return 'badge-default';
 }
@@ -78,16 +79,17 @@ export default function KoofrBrowser({ onAdd }) {
   function handleAdd() {
     if (!selectedFile) return;
     const ext = selectedFile.name.split('.').pop().toUpperCase();
-    const isAudio = MOD_FORMATS.has(ext) || ['MP3', 'WAV', 'OGG', 'MID', 'MIDI'].includes(ext);
+    const isPlayable = PLAYABLE_FORMATS.has(ext);
 
     // The proxy URL the player will use to fetch this file
     const proxyUrl = `/api/koofr/file?path=${encodeURIComponent(selectedFile.path)}`;
 
+    if (!isPlayable) return; // Guard: never add non-playable files
     onAdd({
       url: proxyUrl,
       title: selectedFile.name,
       filename: selectedFile.name,
-      mediaType: isAudio ? 'audio' : 'video',
+      mediaType: 'audio',
       format: ext,
       duration: 0,
     });
@@ -96,7 +98,7 @@ export default function KoofrBrowser({ onAdd }) {
   }
 
   const trackerFiles = files.filter(f => !f.isDirectory && MOD_FORMATS.has(f.name.split('.').pop().toUpperCase()));
-  const otherFiles = files.filter(f => !f.isDirectory && !MOD_FORMATS.has(f.name.split('.').pop().toUpperCase()));
+  const otherFiles = files.filter(f => !f.isDirectory && !MOD_FORMATS.has(f.name.split('.').pop().toUpperCase()) && PLAYABLE_FORMATS.has(f.name.split('.').pop().toUpperCase()));
   const directories = files.filter(f => f.isDirectory);
 
   return (
