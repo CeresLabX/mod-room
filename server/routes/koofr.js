@@ -15,6 +15,9 @@ const {
   KOOFR_BASE_URL: baseUrl = 'https://app.koofr.net/dav/Koofr',
 } = process.env;
 
+// Allowed path root — must be inside /public/music/
+const KOOFR_ROOT = '/public/music/mod';
+
 if (!email || !password) {
   console.warn('[koofr] KOOFR_EMAIL / KOOFR_PASSWORD not set — Koofr browsing disabled');
 }
@@ -62,7 +65,14 @@ router.get('/list', async (req, res) => {
     return res.status(503).json({ error: 'Koofr not configured' });
   }
 
-  const itemPath = (req.query.path || '/public/music/mod').replace(/\/$/, '');
+  let itemPath = (req.query.path || KOOFR_ROOT).replace(/\/$/, '');
+
+  // Security: enforce KOOFR_ROOT boundary — only allow the root itself and its subdirectories
+  if (itemPath !== KOOFR_ROOT && !itemPath.startsWith(KOOFR_ROOT + '/')) {
+    console.warn(`[koofr] path traversal blocked: ${itemPath} (root: ${KOOFR_ROOT})`);
+    itemPath = KOOFR_ROOT;
+  }
+
   const koofrUrl = `${baseUrl}${itemPath}/`;
 
   try {
@@ -129,9 +139,15 @@ router.get('/file', async (req, res) => {
     return res.status(503).json({ error: 'Koofr not configured' });
   }
 
-  const itemPath = req.query.path;
+  let itemPath = req.query.path;
   if (!itemPath) {
     return res.status(400).json({ error: 'path query parameter required' });
+  }
+
+  // Security: enforce KOOFR_ROOT boundary
+  if (itemPath !== KOOFR_ROOT && !itemPath.startsWith(KOOFR_ROOT + '/')) {
+    console.warn(`[koofr] file path traversal blocked: ${itemPath}`);
+    return res.status(403).json({ error: 'Access denied' });
   }
 
   const koofrUrl = `${baseUrl}${itemPath}`;

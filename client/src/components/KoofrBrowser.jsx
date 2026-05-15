@@ -7,6 +7,9 @@ import React, { useState, useEffect } from 'react';
 
 const MOD_FORMATS = new Set(['MOD', 'XM', 'S3M', 'IT', 'AHX', 'MPT', 'MED', 'MTM', '669', 'ULT', 'STM', 'OKT']);
 
+// The root path for Koofr browsing — users cannot navigate above this.
+const KOOFR_ROOT = '/public/music/mod';
+
 function formatSize(bytes) {
   if (!bytes) return '';
   if (bytes < 1024) return `${bytes}B`;
@@ -23,7 +26,7 @@ function getBadgeClass(name) {
 }
 
 export default function KoofrBrowser({ onAdd }) {
-  const [path, setPath] = useState('/public/');
+  const [path, setPath] = useState(KOOFR_ROOT);
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -64,7 +67,12 @@ export default function KoofrBrowser({ onAdd }) {
     const parts = path.split('/').filter(Boolean);
     parts.pop();
     const newPath = '/' + parts.join('/');
-    if (newPath !== path) setPath(newPath);
+    // Block navigation above KOOFR_ROOT
+    if (newPath.length < KOOFR_ROOT.length && !newPath.startsWith(KOOFR_ROOT)) {
+      setPath(KOOFR_ROOT);
+    } else if (newPath !== path) {
+      setPath(newPath);
+    }
   }
 
   function handleAdd() {
@@ -110,8 +118,8 @@ export default function KoofrBrowser({ onAdd }) {
         <div style={{ textAlign: 'center', padding: 24, color: 'var(--dim)' }}>Empty folder</div>
       ) : (
         <div className="koofr-file-list">
-          {/* Up button */}
-          {path !== '/' && (
+          {/* Up button — hidden when at or above KOOFR_ROOT */}
+          {path !== KOOFR_ROOT && path !== '/' && (
             <div className="koofr-item koofr-dir" onClick={navigateUp}>
               <span style={{ fontSize: 14 }}>📁</span>
               <span className="koofr-name">..</span>
