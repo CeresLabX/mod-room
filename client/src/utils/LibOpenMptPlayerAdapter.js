@@ -43,7 +43,9 @@ export class LibOpenMptPlayerAdapter {
 
       try {
         this._player = new ChiptuneJsPlayer({ context: this._audioContext });
+        console.info(`[libopenmpt] ChiptuneJsPlayer created for .${ext}, waiting for init...`);
       } catch (err) {
+        console.error(`[libopenmpt] Failed to create ChiptuneJsPlayer for .${ext}:`, err);
         reject(err);
         return;
       }
@@ -58,6 +60,7 @@ export class LibOpenMptPlayerAdapter {
 
       this._player.onInitialized(() => {
         initialized = true;
+        console.info(`[libopenmpt] ChiptuneJsPlayer initialized for .${ext}`);
       });
 
       this._player.onMetadata((meta) => {
@@ -87,6 +90,7 @@ export class LibOpenMptPlayerAdapter {
       });
 
       this._player.onError((err) => {
+        console.error(`[libopenmpt] chiptune3 error for .${ext}:`, err);
         if (!metadataReceived) {
           reject(new Error(`Failed to load tracker: ${err.type || 'unknown error'}`));
         }
@@ -99,8 +103,11 @@ export class LibOpenMptPlayerAdapter {
       // Start playback with the ArrayBuffer
       // chiptune3's play() takes an ArrayBuffer
       try {
+        console.info(`[libopenmpt] Calling chiptune3.play() for .${ext} (${arrayBuffer.byteLength} bytes)`);
         this._player.play(arrayBuffer);
+        console.info(`[libopenmpt] chiptune3.play() succeeded for .${ext}`);
       } catch (err) {
+        console.error(`[libopenmpt] chiptune3.play() threw for .${ext}:`, err);
         reject(err);
         return;
       }
