@@ -69,6 +69,8 @@ function safeRelativePath(itemPath) {
  */
 async function isDirectory(webdavPath) {
   const koofrUrl = `${baseUrl}${webdavPath}`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
   const response = await fetch(koofrUrl, {
     method: 'PROPFIND',
     headers: {
@@ -77,7 +79,8 @@ async function isDirectory(webdavPath) {
       'Content-Type': 'application/xml',
     },
     body: '<?xml version="1.0" encoding="utf-8"?><propfind xmlns="DAV:"><prop><resourcetype/></prop></propfind>',
-  });
+    signal: controller.signal,
+  }).finally(() => clearTimeout(timeout));
 
   if (response.status === 207) {
     const xml = await response.text();
@@ -94,6 +97,8 @@ async function isDirectory(webdavPath) {
  */
 async function webdavList(webdavPath) {
   const koofrUrl = `${baseUrl}${webdavPath}/`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 20000);
   const response = await fetch(koofrUrl, {
     method: 'PROPFIND',
     headers: {
@@ -102,7 +107,9 @@ async function webdavList(webdavPath) {
       'Content-Type': 'application/xml',
     },
     body: '<?xml version="1.0" encoding="utf-8"?><propfind xmlns="DAV:"><prop><displayname/><getcontentlength/><getcontenttype/><resourcetype/></prop></propfind>',
+    signal: controller.signal,
   });
+  clearTimeout(timeout);
 
   if (!response.ok) {
     throw new Error(`WebDAV error ${response.status} for ${webdavPath}`);
@@ -341,6 +348,8 @@ router.post('/reindex', async (req, res) => {
       for (const item of items.slice(0, 5)) {
         console.log(`  name=${item.name} isDir=${item.isDirectory} ext=${item.extension} playable=${item.playable} relPath=${item.relPath}`);
       }
+    } else if ((stats.folders + stats.files) % 100 === 0) {
+      console.log(`[library] progress: folders=${stats.folders} files=${stats.files} playable=${stats.playable}`);
     }
 
     for (const item of items) {
