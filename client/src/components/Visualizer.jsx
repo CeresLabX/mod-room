@@ -1,10 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { registry, VISUALIZER_NONE } from '../visualizers/registry.js';
+
+// ─── Existing visualizers (retained inline) ────────────────────────────────
 
 const BAR_COUNT = 24;
 
-// Fallback: fake animated bars
 function FakeBars({ count = BAR_COUNT }) {
-  const [heights, setHeights] = useState(() => Array(count).fill(0).map(() => Math.random() * 60 + 10));
+  const [heights, setHeights] = useState(() =>
+    Array(count).fill(0).map(() => Math.random() * 60 + 10)
+  );
   const intervalRef = useRef(null);
 
   useEffect(() => {
@@ -17,25 +21,18 @@ function FakeBars({ count = BAR_COUNT }) {
   return (
     <div className="visualizer-display">
       {heights.map((h, i) => (
-        <div
-          key={i}
-          className="eq-bar"
-          style={{ height: `${h}%` }}
-        />
+        <div key={i} className="eq-bar" style={{ height: `${h}%` }} />
       ))}
     </div>
   );
 }
 
-// Spectrum bars via Web Audio
-function SpectrumBars({ analyserNode, animFrameRef, playerRef }) {
+function SpectrumBars({ analyserNode }) {
   const [bars, setBars] = useState(Array(BAR_COUNT).fill(0));
-  const canvasRef = useRef(null);
   const rafRef = useRef(null);
 
   useEffect(() => {
     if (!analyserNode) return;
-
     const bufferLength = analyserNode.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
 
@@ -57,67 +54,57 @@ function SpectrumBars({ analyserNode, animFrameRef, playerRef }) {
   return (
     <div className="visualizer-display">
       {bars.map((h, i) => (
-        <div
-          key={i}
-          className="eq-bar"
-          style={{ height: `${Math.max(2, h)}%` }}
-        />
+        <div key={i} className="eq-bar" style={{ height: `${Math.max(2, h)}%` }} />
       ))}
     </div>
   );
 }
 
-// Oscilloscope waveform
-function Oscilloscope({ analyserNode, animFrameRef, playerRef }) {
+function Oscilloscope({ analyserNode }) {
   const canvasRef = useRef(null);
   const rafRef = useRef(null);
 
   useEffect(() => {
     if (!analyserNode) return;
-
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    const W = canvas.width;
-    const H = canvas.height;
 
     const bufferLength = analyserNode.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
+    const timeData = new Uint8Array(bufferLength);
+
+    const getColor = (v) =>
+      getComputedStyle(document.documentElement).getPropertyValue('--primary').trim() || '#00FF41';
+    const getDim = () =>
+      getComputedStyle(document.documentElement).getPropertyValue('--dim').trim() || '#008844';
 
     const draw = () => {
-      // Also get time domain
-      const timeData = new Uint8Array(bufferLength);
+      const W = canvas.width;
+      const H = canvas.height;
       analyserNode.getByteTimeDomainData(timeData);
 
       ctx.fillStyle = 'rgba(0,0,0,0.3)';
       ctx.fillRect(0, 0, W, H);
 
       ctx.lineWidth = 2;
-      ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--primary').trim() || '#00FF41';
+      ctx.strokeStyle = getColor();
       ctx.shadowColor = ctx.strokeStyle;
       ctx.shadowBlur = 8;
       ctx.beginPath();
 
       const sliceWidth = W / bufferLength;
       let x = 0;
-
       for (let i = 0; i < bufferLength; i++) {
         const v = timeData[i] / 128.0;
         const y = (v * H) / 2;
-
-        if (i === 0) {
-          ctx.moveTo(x, y);
-        } else {
-          ctx.lineTo(x, y);
-        }
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
         x += sliceWidth;
       }
-
       ctx.lineTo(W, H / 2);
       ctx.stroke();
 
-      // Grid lines
-      ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--dim').trim() || '#008844';
+      ctx.strokeStyle = getDim();
       ctx.shadowBlur = 0;
       ctx.lineWidth = 0.5;
       ctx.beginPath();
@@ -136,7 +123,6 @@ function Oscilloscope({ analyserNode, animFrameRef, playerRef }) {
     <div className="visualizer-display" style={{ padding: 0 }}>
       <canvas
         ref={canvasRef}
-        className="oscilloscope"
         width={400}
         height={100}
         style={{ width: '100%', height: '100%', background: '#000' }}
@@ -145,14 +131,13 @@ function Oscilloscope({ analyserNode, animFrameRef, playerRef }) {
   );
 }
 
-// Fake tracker-style channel meters
-function TrackerMeters({ analyserNode, animFrameRef, playerRef }) {
+function TrackerMeters({ analyserNode }) {
   const [levels, setLevels] = useState(Array(8).fill(0));
   const rafRef = useRef(null);
+  const intervalRef = useRef(null);
 
   useEffect(() => {
     if (!analyserNode) {
-      // Fake animation
       const interval = setInterval(() => {
         setLevels(prev => prev.map(() => Math.random() * 80 + 5));
       }, 100);
@@ -196,61 +181,118 @@ function TrackerMeters({ analyserNode, animFrameRef, playerRef }) {
   );
 }
 
-export default function Visualizer({ analyserNode, analyserRef, animFrameRef, playerRef, status }) {
-  const [mode, setMode] = useState('spectrum');
+// ─── Lazy-loaded new visualizers ──────────────────────────────────────────
 
-  // No analyser = use fake bars
+const LAZY_VISUALIZERS = {
+  'starfield':    () => import('../visualizers/StarfieldPulse.jsx' /* @vite-ignore */),
+  'vu-meters':    () => import('../visualizers/VUMeterDeck.jsx' /* @vite-ignore */),
+  'neon-tunnel':  () => import('../visualizers/NeonTunnel.jsx' /* @vite-ignore */),
+  'plasma':       () => import('../visualizers/PlasmaField.jsx' /* @vite-ignore */),
+  'pixel-eq':     () => import('../visualizers/PixelEqualizer.jsx' /* @vite-ignore */),
+  'piano-roll':   () => import('../visualizers/PianoRoll.jsx' /* @vite-ignore */),
+  'matrix-rain':  () => import('../visualizers/MatrixRain.jsx' /* @vite-ignore */),
+};
+
+// ─── Visualizer selector UI ─────────────────────────────────────────────────
+
+const STORAGE_KEY = 'modroom-visualizer';
+
+function loadSavedVisualizer() {
+  try {
+    return localStorage.getItem(STORAGE_KEY) || 'spectrum';
+  } catch {
+    return 'spectrum';
+  }
+}
+
+function saveVisualizer(id) {
+  try {
+    localStorage.setItem(STORAGE_KEY, id);
+  } catch {}
+}
+
+export default function Visualizer({ analyserNode, status }) {
+  const [selected, setSelected] = useState(loadSavedVisualizer);
+  const [LazyComp, setLazyComp] = useState(null);
+  const lazyModRef = useRef(null);
+
+  const handleSelect = useCallback((id) => {
+    setSelected(id);
+    saveVisualizer(id);
+    setLazyComp(null);
+    lazyModRef.current = null;
+  }, []);
+
+  // Load lazy component when selected changes to a lazy one
+  useEffect(() => {
+    const loader = LAZY_VISUALIZERS[selected];
+    if (loader) {
+      loader().then(mod => {
+        setLazyComp(() => mod.default);
+      }).catch(err => {
+        console.error('[visualizer] failed to load', selected, err);
+        setLazyComp(null);
+      });
+    }
+  }, [selected]);
+
+  // No analyser → always show fake bars
   if (!analyserNode) {
     return <FakeBars count={BAR_COUNT} />;
   }
 
+  // None/off mode
+  if (selected === VISUALIZER_NONE) {
+    return (
+      <div className="visualizer-display" style={{ justifyContent: 'center', alignItems: 'center' }}>
+        <div className="text-dim text-xs" style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 24, marginBottom: 8 }}>○</div>
+          <div>Visualizer OFF</div>
+          <div style={{ marginTop: 4 }}>Select a visualizer to reactivate</div>
+        </div>
+      </div>
+    );
+  }
+
+  const currentRegistry = registry.find(v => v.id === selected);
+  const otherOptions = registry.filter(v => v.id !== selected);
+
   return (
     <>
-      <div className="visualizer-tabs">
-        <button
-          className={`visualizer-tab ${mode === 'spectrum' ? 'active' : ''}`}
-          onClick={() => setMode('spectrum')}
+      <div className="visualizer-selector">
+        <select
+          className="visualizer-select"
+          value={selected}
+          onChange={e => handleSelect(e.target.value)}
         >
-          SPECTRUM
-        </button>
+          {currentRegistry
+            ? <option value={currentRegistry.id}>{currentRegistry.name}</option>
+            : null}
+          {otherOptions.map(v => (
+            <option key={v.id} value={v.id}>{v.name}</option>
+          ))}
+          <option value={VISUALIZER_NONE}>— OFF —</option>
+        </select>
         <button
-          className={`visualizer-tab ${mode === 'scope' ? 'active' : ''}`}
-          onClick={() => setMode('scope')}
+          className="btn btn-small"
+          title="Random visualizer"
+          onClick={() => {
+            const ids = registry.map(v => v.id).filter(id => id !== VISUALIZER_NONE);
+            const pick = ids[Math.floor(Math.random() * ids.length)];
+            handleSelect(pick);
+          }}
         >
-          SCOPE
+          [⟳]
         </button>
-        <button
-          className={`visualizer-tab ${mode === 'tracker' ? 'active' : ''}`}
-          onClick={() => setMode('tracker')}
-        >
-          TRACKER
-        </button>
+        {currentRegistry && (
+          <span className="visualizer-desc">{currentRegistry.description}</span>
+        )}
       </div>
 
-      {mode === 'spectrum' && (
-        <SpectrumBars
-          analyserNode={analyserNode}
-          analyserRef={analyserRef}
-          animFrameRef={animFrameRef}
-          playerRef={playerRef}
-        />
-      )}
-      {mode === 'scope' && (
-        <Oscilloscope
-          analyserNode={analyserNode}
-          analyserRef={analyserRef}
-          animFrameRef={animFrameRef}
-          playerRef={playerRef}
-        />
-      )}
-      {mode === 'tracker' && (
-        <TrackerMeters
-          analyserNode={analyserNode}
-          analyserRef={analyserRef}
-          animFrameRef={animFrameRef}
-          playerRef={playerRef}
-        />
-      )}
+      {selected === 'spectrum' && <SpectrumBars analyserNode={analyserNode} />}
+      {selected === 'scope' && <Oscilloscope analyserNode={analyserNode} />}
+      {selected === 'tracker' && <TrackerMeters analyserNode={analyserNode} />}
+      {LazyComp && <LazyComp analyserNode={analyserNode} status={status} />}
     </>
   );
 }

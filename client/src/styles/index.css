@@ -530,27 +530,45 @@ label {
   overflow: hidden;
 }
 
-.visualizer-tabs {
+.visualizer-selector {
   display: flex;
-  gap: 4px;
+  align-items: center;
+  gap: 8px;
   padding: 8px 16px;
   border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
 }
 
-.visualizer-tab {
+.visualizer-select {
   font-family: var(--font-main);
   font-size: var(--font-size-xs);
-  background: transparent;
-  border: 1px solid var(--dim);
-  color: var(--dim);
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  color: var(--primary);
   padding: 4px 8px;
   cursor: pointer;
+  outline: none;
 }
 
-.visualizer-tab.active {
+.visualizer-select:focus {
   border-color: var(--accent);
-  color: var(--accent);
   box-shadow: var(--glow-accent);
+}
+
+.visualizer-select option {
+  background: var(--bg);
+  color: var(--primary);
+}
+
+.visualizer-desc {
+  font-size: var(--font-size-xs);
+  color: var(--dim);
+  font-style: italic;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .visualizer-display {
