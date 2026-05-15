@@ -103,7 +103,7 @@ async function isDirectory(webdavPath) {
 async function webdavList(webdavPath) {
   const koofrUrl = `${baseUrl}${webdavPath}/`;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 60000);
+  const timeout = setTimeout(() => controller.abort(), 30000);
   let response;
   try {
     response = await fetch(koofrUrl, {
@@ -356,7 +356,8 @@ router.post('/reindex', async (req, res) => {
     }
 
     // Log first few items of first call to debug detection
-    if (stats.folders === 0 && stats.files === 0) {
+    const isModFolder = webdavPath.includes('/MOD');
+    if ((stats.folders === 0 && stats.files === 0) || isModFolder) {
       console.log(`[library] walk(${webdavPath}) got ${items.length} items, first 5:`);
       for (const item of items.slice(0, 5)) {
         console.log(`  name=${item.name} isDir=${item.isDirectory} ext=${item.extension} playable=${item.playable} relPath=${item.relPath}`);
