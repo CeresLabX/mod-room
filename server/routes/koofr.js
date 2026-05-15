@@ -96,10 +96,11 @@ router.get('/list', async (req, res) => {
 
     const files = [];
     for (const item of rawResponses) {
-      if (!item.href || item.href === `${itemPath}/` || item.href === itemPath) continue;
+      // Skip the directory's own entry (empty dir returns itself in PROPFIND)
+      const cleanPath = item.href.replace(/^\/dav\/Koofr/, '').replace(/\/+$/, '');
+      const itemPathNorm = itemPath.replace(/\/+$/, '');
+      if (!item.href || cleanPath === itemPathNorm) continue;
 
-      // Strip the /dav/Koofr prefix
-      const cleanPath = item.href.replace(/^\/dav\/Koofr/, '');
       const name = item.displayName || decodeURIComponent(cleanPath.split('/').pop());
 
       // Detect format from extension
