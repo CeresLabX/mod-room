@@ -1,15 +1,45 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useAudioPlayer } from '../hooks/useAudioPlayer.js';
 import { useModPlayer } from '../hooks/useModPlayer.js';
+import { useTrackerPlayer } from '../hooks/useTrackerPlayer.js';
 import Visualizer from './Visualizer.jsx';
 import VideoPlayer from './VideoPlayer.jsx';
+import LearnAboutMusicFormats from './LearnAboutMusicFormats.jsx';
 
-const MOD_FORMATS = new Set(['MOD', 'XM', 'S3M', 'IT', 'AHX', 'MPT', 'MED', 'MTM', '669', 'ULT', 'STM', 'OKT']);
-function isModFormat(item) {
+// All supported tracker formats (uppercase)
+const ALL_TRACKER_FORMATS = new Set([
+  'MOD', 'XM', 'S3M', 'IT', 'MPT', 'AHX', 'MED', 'MTM', '669', 'ULT', 'STM', 'OKT',
+  'AMF', 'DMF', 'PSM', 'PTM', 'DBM',
+]);
+
+// Pure MOD (handled by modplayer Protracker engine)
+const MODPLAYER_FORMATS = new Set(['MOD']);
+
+// Formats that chiptune3/libopenmpt handles (with seeking support)
+const LIBOPENMPT_TRACKER_FORMATS = new Set([
+  'XM', 'S3M', 'IT', 'MPT', 'MED', 'MTM', '669', 'ULT', 'STM', 'OKT',
+  'AMF', 'DMF', 'PSM', 'PTM', 'DBM',
+]);
+
+function isTrackerFormat(item) {
   if (!item) return false;
   const fmt = (item.format || '').toUpperCase();
   const ext = (item.filename || item.url || '').split('.').pop().toUpperCase();
-  return MOD_FORMATS.has(fmt) || MOD_FORMATS.has(ext);
+  return ALL_TRACKER_FORMATS.has(fmt) || ALL_TRACKER_FORMATS.has(ext);
+}
+
+function isModPlayerFormat(item) {
+  if (!item) return false;
+  const fmt = (item.format || '').toUpperCase();
+  const ext = (item.filename || item.url || '').split('.').pop().toUpperCase();
+  return MODPLAYER_FORMATS.has(fmt) || MODPLAYER_FORMATS.has(ext);
+}
+
+function isTrackerWithSeeking(item) {
+  if (!item) return false;
+  const fmt = (item.format || '').toUpperCase();
+  const ext = (item.filename || item.url || '').split('.').pop().toUpperCase();
+  return LIBOPENMPT_TRACKER_FORMATS.has(fmt) || LIBOPENMPT_TRACKER_FORMATS.has(ext);
 }
 
 function formatTime(s) {
@@ -22,6 +52,7 @@ function formatTime(s) {
 export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onPause, onSeek, onNext, emit }) {
   const [showVideo, setShowVideo] = useState(false);
   const [localStatus, setLocalStatus] = useState('idle');
+  const [showFormatInfo, setShowFormatInfo] = useState(false);
 
   const handleEnded = () => {
     emit('next', {});
@@ -31,23 +62,38 @@ export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onP
     console.error('[player] error:', e);
   };
 
-  // Always call both hooks (React rules: hooks can't be conditional)
+  const isTracker = isTrackerFormat(item);
+  const isPureMod = isModPlayerFormat(item);
+  const hasSeeking = isTrackerWithSeeking(item);
+
+  // .mod files → useModPlayer
+  // other trackers → useTrackerPlayer
+  // everything else → useAudioPlayer
   const modPlayer = useModPlayer({
-    item: isModFormat(item) ? item : null,
+    item: isPureMod ? item : null,
+    onEnded: handleEnded,
+    onError: handlePlayerError,
+  });
+
+  const trackerPlayer = useTrackerPlayer({
+    item: (isTracker && !isPureMod) ? item : null,
     onEnded: handleEnded,
     onError: handlePlayerError,
   });
 
   const htmlPlayer = useAudioPlayer({
-    item: isModFormat(item) ? null : item,
+    item: isTracker ? null : item,
     onEnded: handleEnded,
     onError: handlePlayerError,
   });
 
-  // Pick the active player based on format
-  const isMod = isModFormat(item);
-  const active = isMod ? modPlayer : htmlPlayer;
-  const { status, currentTime, duration, volume, analyserNode, analyserRef, animFrameRef, playerRef, play, pause, stop, seek, changeVolume, syncTo, autoplayBlocked, clearAutoplayBlocked } = active;
+  const active = isPureMod ? modPlayer : isTracker ? trackerPlayer : htmlPlayer;
+  const {
+    status, currentTime, duration, volume, analyserNode, analyserRef, animFrameRef,
+    playerRef, play, pause, stop, seek, changeVolume, syncTo,
+    autoplayBlocked, clearAutoplayBlocked, metadata,
+  } = active;
+
   const progressPct = duration ? Math.min(100, Math.max(0, (currentTime / duration) * 100)) : 0;
 
   useEffect(() => {
@@ -67,7 +113,7 @@ export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onP
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item?.id, playback.itemId, playback.status, playback.timestamp, status]);
 
-  // Unlock audio on any user click — browser autoplay policy requires a gesture
+  // Unlock audio on any user click
   useEffect(() => {
     if (!autoplayBlocked) return;
     const unlockAudio = () => {
@@ -80,35 +126,27 @@ export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onP
     return () => document.removeEventListener('click', unlockAudio);
   }, [autoplayBlocked, playback.status, play, clearAutoplayBlocked]);
 
-  // Keep refs for periodic sync interval
   const playbackRef = useRef(playback);
-  useEffect(() => {
-    playbackRef.current = playback;
-  }, [playback]);
+  useEffect(() => { playbackRef.current = playback; }, [playback]);
 
-  const syncStateRef = useRef({ currentTime, status, syncTo, play, isMod });
+  const syncStateRef = useRef({ currentTime, status, syncTo, play, isTracker: isTracker && !isPureMod, hasSeeking });
   useEffect(() => {
-    syncStateRef.current = { currentTime, status, syncTo, play, isMod };
-  }, [currentTime, status, syncTo, play, isMod]);
+    syncStateRef.current = { currentTime, status, syncTo, play, isTracker: isTracker && !isPureMod, hasSeeking };
+  }, [currentTime, status, syncTo, play, isTracker, isPureMod, hasSeeking]);
 
-  // Periodic sync interval — every 3 seconds, correct drift
+  // Periodic sync — correct drift
   useEffect(() => {
     const interval = setInterval(() => {
       const p = playbackRef.current;
       const s = syncStateRef.current;
-
-      // Skip if we don't have the new sync fields yet (backward compat).
-      // Important: position 0 is valid, so don't use a falsy check here.
       if (p.positionMsAtLastUpdate === undefined || p.positionMsAtLastUpdate === null || !p.serverUpdatedAt) return;
 
-      // Calculate expected position
       let expectedMs = p.positionMsAtLastUpdate;
       if (p.isPlaying) {
         const now = Date.now();
         if (p.serverTime && p.expectedPositionMs !== undefined) {
           expectedMs = p.expectedPositionMs + (now - p.serverTime);
         } else {
-          // Fallback: assume client/server clocks are roughly in sync
           expectedMs = p.positionMsAtLastUpdate + (now - p.serverUpdatedAt);
         }
       }
@@ -116,20 +154,18 @@ export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onP
       const expectedSec = expectedMs / 1000;
       const drift = Math.abs(s.currentTime - expectedSec);
 
-      // Skip drift correction for MOD files (seeking not supported)
-      if (!s.isMod && drift > 2) {
-        console.log(`[sync] Drift ${drift.toFixed(1)}s, seeking to ${expectedSec.toFixed(1)}s`);
-        s.syncTo(expectedSec);
+      // Only skip for pure .mod (no seeking), allow resync for trackers with seeking
+      if (!s.isTracker || s.hasSeeking) {
+        if (drift > 2) {
+          s.syncTo(expectedSec);
+        }
       }
 
-      // If should be playing but is paused, attempt play
       if (p.status === 'playing' && s.status !== 'playing') {
         s.play().catch(() => {});
       }
     }, 3000);
-
     return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleProgressClick = (e) => {
@@ -171,26 +207,64 @@ export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onP
     }
   };
 
+  const handleResync = () => {
+    if (playback.timestamp !== undefined) {
+      syncTo(playback.timestamp);
+      setCurrentTime(playback.timestamp);
+    }
+  };
+
   const isVideoType = item?.mediaType === 'video' || ['MP4', 'WEBM', 'MPEG'].includes(item?.format);
   const isYouTube = item?.mediaType === 'youtube' || item?.url?.includes('youtube.com') || item?.url?.includes('youtu.be');
   const noItem = !item;
 
+  // Track info: show format badge and any metadata from the tracker player
+  const trackerMeta = isTracker ? metadata : null;
+
   return (
     <div className="player-panel">
+      {showFormatInfo && <LearnAboutMusicFormats onClose={() => setShowFormatInfo(false)} />}
+
       <div className="player-section">
         <div className="now-playing">{'▶ NOW PLAYING'}</div>
         {item ? (
           <>
             <div className="track-title">{item.title || item.filename || 'Unknown'}</div>
             <div className="track-meta">
-              <span className={`badge badge-${item.mediaType || 'audio'}`}>
-                {isMod ? 'MOD/TRACKER' : (item.format || 'AUDIO')}
+              <span
+                className={`badge badge-${item.mediaType || 'audio'}`}
+                style={{ cursor: 'pointer' }}
+                onClick={() => setShowFormatInfo(true)}
+                title="Learn about this format"
+              >
+                {isPureMod ? 'MOD' : isTracker ? (item.format || 'TRACKER') : (item.format || 'AUDIO')}
               </span>
+              <button
+                className="btn btn-small"
+                style={{ fontSize: 'var(--font-size-xs)', padding: '1px 6px', marginLeft: 4 }}
+                onClick={() => setShowFormatInfo(true)}
+                title="Learn about music formats"
+              >
+                ⓘ
+              </button>
               <span>by {item.addedBy}</span>
               {isYouTube && <span className="badge badge-youtube">YOUTUBE</span>}
               {item.mediaType === 'midi' && <span className="badge badge-midi">MIDI</span>}
-              {isMod && <span className="badge badge-mod">TRACKER</span>}
+              {isTracker && <span className="badge badge-mod">TRACKER</span>}
             </div>
+            {trackerMeta && (
+              <div className="track-meta" style={{ marginTop: 4, fontSize: 'var(--font-size-xs)', color: 'var(--dim)' }}>
+                {trackerMeta.channels && <span>Ch: {trackerMeta.channels} | </span>}
+                {trackerMeta.instruments && <span>Instr: {trackerMeta.instruments} | </span>}
+                {trackerMeta.patterns && <span>Patt: {trackerMeta.patterns} | </span>}
+                {trackerMeta.durationSeconds && (
+                  <span>~{formatTime(trackerMeta.durationSeconds)}</span>
+                )}
+                {trackerMeta.warnings && trackerMeta.warnings.some(w => w.includes('experimental')) && (
+                  <span style={{ color: '#f39c12' }}> | ⚠ AHX experimental</span>
+                )}
+              </div>
+            )}
           </>
         ) : (
           <div className="track-title text-dim">— NO TRACK LOADED —</div>
@@ -224,19 +298,17 @@ export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onP
       <div className="player-section">
         <div className="progress-bar-wrap" onClick={handleProgressClick}>
           <div className="progress-bar">
-            <div
-              className="progress-bar-fill"
-              style={{ width: `${progressPct}%` }}
-            />
+            <div className="progress-bar-fill" style={{ width: `${progressPct}%` }} />
           </div>
           <div className="progress-time">
             <span>{formatTime(currentTime)}</span>
             <span>{formatTime(duration)}</span>
           </div>
         </div>
-        {isMod && (
+
+        {isPureMod && (
           <div className="text-dim text-xs" style={{ textAlign: 'center', marginTop: 4, marginBottom: 4 }}>
-            ⓘ Seeking not supported for tracker modules
+            ⓘ Seeking not supported for .MOD files
           </div>
         )}
 
@@ -252,7 +324,7 @@ export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onP
             </div>
           ) : (
             <>
-              {!isMod && (
+              {!isPureMod && (
                 <button className="btn btn-small" onClick={handleSkipBack} disabled={noItem || !duration}>[⏪ -10s]</button>
               )}
               <>
@@ -264,8 +336,18 @@ export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onP
                 <button className="btn btn-small" onClick={onNext} disabled={queue.length <= 1}>[⏭ NEXT]</button>
                 <button className="btn btn-small" onClick={() => { stop(); onPause(); setLocalStatus('idle'); }}>[⏹ STOP]</button>
               </>
-              {!isMod && (
+              {!isPureMod && (
                 <button className="btn btn-small" onClick={handleSkipForward} disabled={noItem || !duration}>[⏩ +10s]</button>
+              )}
+              {hasSeeking && (
+                <button
+                  className="btn btn-small"
+                  onClick={handleResync}
+                  title="Resync to server position"
+                  style={{ color: 'var(--accent)' }}
+                >
+                  [⟳ RESYNC]
+                </button>
               )}
             </>
           )}

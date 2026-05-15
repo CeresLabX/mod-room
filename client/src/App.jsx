@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
 import RoomLanding from './components/RoomLanding.jsx';
 import RoomView from './components/RoomView.jsx';
+import MusicFormatsPage from './pages/MusicFormatsPage.jsx';
 // Legacy /room/code/:roomCode route: normalize to canonical readable /room/:roomCode
 function ResolveRoomCode() {
   const { roomCode } = useParams();
@@ -39,6 +40,7 @@ export default function App() {
         <Route path="/" element={<RoomLanding theme={theme} applyTheme={applyTheme} />} />
         <Route path="/room/code/:roomCode" element={<ResolveRoomCode />} />
         <Route path="/room/:roomId" element={<RoomView theme={theme} applyTheme={applyTheme} />} />
+        <Route path="/music-formats" element={<MusicFormatsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

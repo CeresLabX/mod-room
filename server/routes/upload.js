@@ -16,6 +16,8 @@ const ALLOWED_EXTENSIONS = new Set([
   'mp3', 'wav', 'ogg', 'midi', 'mid',
   'mod', 'xm', 's3m', 'it',
   'mp4', 'webm', 'mpeg',
+  // Tracker extensions
+  'ahx', 'mptm', 'dbm', 'stm', 'okt', 'amf', 'dmf', 'psm', 'ptm', '669',
 ]);
 
 const MAX_SIZE_MB = parseInt(process.env.MAX_UPLOAD_SIZE_MB || '100', 10);
@@ -83,7 +85,7 @@ router.post('/', upload.single('file'), (req, res) => {
   const file = req.file;
   const ext = path.extname(file.originalname).toLowerCase().slice(1);
 
-  const audioExts = ['mp3', 'wav', 'ogg', 'midi', 'mid', 'mod', 'xm', 's3m', 'it'];
+  const audioExts = ['mp3', 'wav', 'ogg', 'midi', 'mid', 'mod', 'xm', 's3m', 'it', 'ahx', 'mptm', 'dbm', 'stm', 'okt', 'amf', 'dmf', 'psm', 'ptm', '669'];
   const videoExts = ['mp4', 'webm', 'mpeg'];
 
   const mediaType = audioExts.includes(ext) ? 'audio' : 'video';

@@ -23,7 +23,7 @@ function getBadgeClass(name) {
 }
 
 export default function KoofrBrowser({ onAdd }) {
-  const [path, setPath] = useState('/public/music/mod');
+  const [path, setPath] = useState('/public/');
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
