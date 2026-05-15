@@ -174,7 +174,7 @@ export default function RoomView({ theme, applyTheme }) {
     socketLike.emit('join-room', { roomId, nickname });
   }, [roomId, nickname, navigate]);
 
-  const { emit } = useSocket({
+  const { socket: socketRef, emit } = useSocket({
     onConnect: ({ socket }) => joinRoom(socket),
     onRoomState: handleRoomState,
     onPlaybackUpdate: handlePlaybackUpdate,
@@ -218,11 +218,18 @@ export default function RoomView({ theme, applyTheme }) {
     emit('next', {});
   };
 
-  const handleAddToQueue = (item, options = {}) => {
-    emit('add-to-queue', { item });
-    if (!options.keepOpen) {
-      setShowAddMedia(false);
+  const handleAddToQueue = async (item, options = {}) => {
+    if (!socketRef.current?.connected) {
+      throw new Error('Not connected to server');
     }
+    return new Promise((resolve, reject) => {
+      socketRef.current.emit('add-to-queue', { item }, (err) => {
+        if (err) { reject(err); } else { resolve(); }
+      });
+      if (!options.keepOpen) {
+        setShowAddMedia(false);
+      }
+    });
   };
 
   const handleRemoveFromQueue = (itemId) => {

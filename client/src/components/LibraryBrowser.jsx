@@ -75,6 +75,7 @@ export default function LibraryBrowser({ onAdd }) {
   const [searchLoading, setSearchLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [addedPath, setAddedPath] = useState('');
+  const [addError, setAddError] = useState('');
   const [addAllLoading, setAddAllLoading] = useState(false);
 
   const breadcrumbs = buildBreadcrumbs(currentPath);
@@ -82,6 +83,11 @@ export default function LibraryBrowser({ onAdd }) {
   const isSearching = searchResults !== null;
 
   // Load folder contents
+  const clearAddFeedback = useCallback(() => {
+    setAddedPath('');
+    setAddError('');
+  }, []);
+
   const loadFolder = useCallback(async (path) => {
     setLoading(true);
     setError('');
@@ -141,8 +147,10 @@ export default function LibraryBrowser({ onAdd }) {
       navigateToFolder(item.relativePath);
     } else {
       if (!item.playable) return;
+      setAddError('');
+      setAddedPath(item.relativePath);
       const proxyUrl = buildFileUrl(item.relativePath);
-      onAdd({
+      const result = onAdd({
         url: proxyUrl,
         title: item.name,
         filename: item.name,
@@ -150,7 +158,10 @@ export default function LibraryBrowser({ onAdd }) {
         format: item.extension || getExtension(item.name),
         duration: 0,
       });
-      setAddedPath(item.relativePath);
+      // If onAdd returns a rejected Promise, show error
+      if (result && typeof result.then === 'function') {
+        result.catch(() => setAddError('Failed to add — check connection'));
+      }
       setSelectedFile(null);
     }
   }
@@ -329,8 +340,13 @@ export default function LibraryBrowser({ onAdd }) {
         </div>
       )}
 
-      {/* Added confirmation */}
-      {addedPath && addedPath !== '__add_all__' && (
+      {/* Added confirmation / error */}
+      {addError && (
+        <div style={{ marginTop: 8, color: 'var(--error)', fontSize: 'var(--font-size-xs)' }}>
+          ✗ {addError}
+        </div>
+      )}
+      {addedPath && addedPath !== '__add_all__' && !addError && (
         <div style={{ marginTop: 8, color: 'var(--accent)', fontSize: 'var(--font-size-xs)' }}>
           ✓ Added to playlist. Pick another file to keep building the queue.
         </div>

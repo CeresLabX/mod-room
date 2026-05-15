@@ -47,5 +47,5 @@ export function useSocket(handlers) {
     socketRef.current?.emit(event, data);
   }, []);
 
-  return { socket: socketRef.current, emit };
+  return { socket: socketRef, emit };
 }
