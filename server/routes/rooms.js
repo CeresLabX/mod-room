@@ -286,6 +286,145 @@ router.post('/:roomId/join', async (req, res) => {
 });
 
 
+
+function mapQueueRows(rows) {
+  return rows.map(q => ({
+    id: q.id, title: q.title, mediaType: q.media_type, url: q.url,
+    filename: q.filename, format: q.format, duration: q.duration,
+    addedBy: q.added_by, position: q.position,
+  }));
+}
+
+async function resolveRoom(db, roomId) {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const roomRes = uuidRegex.test(roomId)
+    ? await db.query('SELECT * FROM rooms WHERE id = $1', [roomId])
+    : await db.query('SELECT * FROM rooms WHERE room_code = $1', [roomId.toUpperCase()]);
+  return roomRes.rows[0] || null;
+}
+
+async function roomQueue(db, roomId) {
+  const queueRes = await db.query(
+    'SELECT * FROM queue_items WHERE room_id = $1 ORDER BY position ASC',
+    [roomId]
+  );
+  return mapQueueRows(queueRes.rows);
+}
+
+function broadcastRoomPlayback(req, roomId, queue) {
+  const io = req.app.locals.io;
+  if (!io) return;
+  io.to(roomId).emit('queue-updated', { queue });
+  roomSync.broadcastPlaybackState(io, roomId);
+}
+
+// Play/resume a queue item via HTTP. Used as the reliable control path; Socket.IO
+// still receives broadcasts for synced clients.
+router.post('/:roomId/play', async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const { itemId } = req.body || {};
+    const db = getDb();
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const room = await resolveRoom(db, roomId);
+    if (!room) return res.status(404).json({ error: 'Room not found' });
+    const canonicalRoomId = room.id;
+    const actualItemId = itemId || room.current_item_id;
+    if (!actualItemId) return res.status(400).json({ error: 'No item selected' });
+
+    const itemRes = await db.query('SELECT id FROM queue_items WHERE id = $1 AND room_id = $2', [actualItemId, canonicalRoomId]);
+    if (!itemRes.rows.length) return res.status(404).json({ error: 'Queue item not found' });
+
+    const startMs = actualItemId === room.current_item_id ? (room.playback_timestamp || 0) * 1000 : 0;
+    const roomSyncState = roomSync.getOrCreateActiveRoom(canonicalRoomId);
+    roomSync.updatePlaybackState(roomSyncState, {
+      roomId: canonicalRoomId,
+      currentTrackId: actualItemId,
+      isPlaying: true,
+      positionMsAtLastUpdate: startMs,
+    });
+    await db.query(
+      'UPDATE rooms SET current_item_id = $1, playback_status = $2, playback_timestamp = $3, playback_updated_at = NOW(), last_command_id = $4 WHERE id = $5',
+      [actualItemId, 'playing', startMs / 1000, roomSyncState.playbackState.lastCommandId, canonicalRoomId]
+    );
+
+    const queue = await roomQueue(db, canonicalRoomId);
+    broadcastRoomPlayback(req, canonicalRoomId, queue);
+    res.json({ ok: true, queue, currentItemId: actualItemId, playbackStatus: 'playing', timestamp: startMs / 1000 });
+  } catch (err) {
+    console.error('[/rooms/:roomId/play POST error]', err.message);
+    res.status(500).json({ error: 'Failed to play item', detail: err.message });
+  }
+});
+
+router.post('/:roomId/pause', async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const db = getDb();
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const room = await resolveRoom(db, roomId);
+    if (!room) return res.status(404).json({ error: 'Room not found' });
+    const canonicalRoomId = room.id;
+    const roomSyncState = roomSync.getOrCreateActiveRoom(canonicalRoomId);
+    if (!roomSyncState.playbackState) roomSync.initPlaybackStateFromDb(canonicalRoomId, room);
+    const currentPosMs = roomSync.calculateExpectedPositionMs(roomSyncState.playbackState || {
+      isPlaying: room.playback_status === 'playing',
+      positionMsAtLastUpdate: (room.playback_timestamp || 0) * 1000,
+      serverUpdatedAt: new Date(room.playback_updated_at || Date.now()).getTime(),
+    });
+
+    roomSync.updatePlaybackState(roomSyncState, {
+      roomId: canonicalRoomId,
+      currentTrackId: room.current_item_id,
+      isPlaying: false,
+      positionMsAtLastUpdate: currentPosMs,
+    });
+    await db.query(
+      'UPDATE rooms SET playback_status = $1, playback_timestamp = $2, playback_updated_at = NOW(), last_command_id = $3 WHERE id = $4',
+      ['paused', currentPosMs / 1000, roomSyncState.playbackState.lastCommandId, canonicalRoomId]
+    );
+
+    const queue = await roomQueue(db, canonicalRoomId);
+    broadcastRoomPlayback(req, canonicalRoomId, queue);
+    res.json({ ok: true, queue, currentItemId: room.current_item_id, playbackStatus: 'paused', timestamp: currentPosMs / 1000 });
+  } catch (err) {
+    console.error('[/rooms/:roomId/pause POST error]', err.message);
+    res.status(500).json({ error: 'Failed to pause playback', detail: err.message });
+  }
+});
+
+router.post('/:roomId/stop', async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const db = getDb();
+    if (!db) return res.status(503).json({ error: 'Database not configured' });
+
+    const room = await resolveRoom(db, roomId);
+    if (!room) return res.status(404).json({ error: 'Room not found' });
+    const canonicalRoomId = room.id;
+    const roomSyncState = roomSync.getOrCreateActiveRoom(canonicalRoomId);
+    roomSync.updatePlaybackState(roomSyncState, {
+      roomId: canonicalRoomId,
+      currentTrackId: room.current_item_id,
+      isPlaying: false,
+      positionMsAtLastUpdate: 0,
+    });
+    await db.query(
+      'UPDATE rooms SET playback_status = $1, playback_timestamp = 0, playback_updated_at = NOW(), last_command_id = $2 WHERE id = $3',
+      ['paused', roomSyncState.playbackState.lastCommandId, canonicalRoomId]
+    );
+
+    const queue = await roomQueue(db, canonicalRoomId);
+    broadcastRoomPlayback(req, canonicalRoomId, queue);
+    res.json({ ok: true, queue, currentItemId: room.current_item_id, playbackStatus: 'paused', timestamp: 0 });
+  } catch (err) {
+    console.error('[/rooms/:roomId/stop POST error]', err.message);
+    res.status(500).json({ error: 'Failed to stop playback', detail: err.message });
+  }
+});
+
 // Advance to next queue item via HTTP. Socket.IO still broadcasts the update,
 // but this keeps the button reliable even if this browser's socket is stale.
 router.post('/:roomId/next', async (req, res) => {

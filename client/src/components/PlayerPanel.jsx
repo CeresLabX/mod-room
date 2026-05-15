@@ -39,7 +39,7 @@ function formatTime(s) {
   return `${m}:${sec.toString().padStart(2, '0')}`;
 }
 
-export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onPause, onSeek, onNext, emit }) {
+export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onPause, onStop, onSeek, onNext, emit }) {
   const [showVideo, setShowVideo] = useState(false);
   const [localStatus, setLocalStatus] = useState('idle');
   const [showFormatInfo, setShowFormatInfo] = useState(false);
@@ -186,7 +186,7 @@ export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onP
   };
 
   const handlePlayPause = () => {
-    if (localStatus === 'playing') {
+    if (playback.status === 'playing' || localStatus === 'playing') {
       pause();
       onPause();
       setLocalStatus('paused');
@@ -195,6 +195,13 @@ export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onP
       onPlay();
       setLocalStatus('playing');
     }
+  };
+
+  const handleStopClick = () => {
+    stop();
+    syncTo(0);
+    onStop?.();
+    setLocalStatus('paused');
   };
 
   const handleResync = () => {
@@ -318,13 +325,13 @@ export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onP
                 <button className="btn btn-small" onClick={handleSkipBack} disabled={noItem || !duration}>[⏪ -10s]</button>
               )}
               <>
-                {localStatus === 'playing' || status === 'playing' ? (
+                {playback.status === 'playing' || localStatus === 'playing' ? (
                   <button className="btn btn-small" onClick={handlePlayPause}>[⏸ PAUSE]</button>
                 ) : (
                   <button className="btn btn-small" onClick={handlePlayPause} disabled={noItem}>[▶ PLAY]</button>
                 )}
                 <button className="btn btn-small" onClick={onNext} disabled={queue.length <= 1}>[⏭ NEXT]</button>
-                <button className="btn btn-small" onClick={() => { stop(); onPause(); setLocalStatus('idle'); }}>[⏹ STOP]</button>
+                <button className="btn btn-small" onClick={handleStopClick} disabled={noItem}>[⏹ STOP]</button>
               </>
               {!isPureMod && (
                 <button className="btn btn-small" onClick={handleSkipForward} disabled={noItem || !duration}>[⏩ +10s]</button>

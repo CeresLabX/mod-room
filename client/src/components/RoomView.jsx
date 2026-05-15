@@ -240,14 +240,63 @@ export default function RoomView({ theme, applyTheme }) {
     }
   }, [roomData?.roomCode]);
 
+
+  const applyPlaybackResponse = useCallback((data) => {
+    const nextQueue = data.queue || queueRef.current || [];
+    if (Array.isArray(data.queue)) {
+      handleQueueUpdated({ queue: nextQueue });
+    }
+    const nextPlayback = {
+      ...playbackRef.current,
+      status: data.playbackStatus || 'idle',
+      itemId: data.currentItemId || null,
+      timestamp: data.timestamp || 0,
+      positionMsAtLastUpdate: (data.timestamp || 0) * 1000,
+      serverUpdatedAt: Date.now(),
+      expectedPositionMs: (data.timestamp || 0) * 1000,
+      serverTime: Date.now(),
+      isPlaying: data.playbackStatus === 'playing',
+    };
+    playbackRef.current = nextPlayback;
+    setPlayback({ ...nextPlayback });
+    setCurrentItem(findCurrentItem(nextQueue, data.currentItemId));
+  }, [findCurrentItem, handleQueueUpdated]);
+
+  const postPlaybackControl = useCallback(async (action, body = {}) => {
+    const targetRoomId = roomData?.id || roomId;
+    const res = await axios.post(`/api/rooms/${encodeURIComponent(targetRoomId)}/${action}`, body);
+    if (!res.data?.ok) throw new Error(res.data?.error || `Failed to ${action}`);
+    applyPlaybackResponse(res.data);
+    return res.data;
+  }, [applyPlaybackResponse, roomData?.id, roomId]);
+
   // Playback handlers
-  const handlePlay = () => {
+  const handlePlay = async () => {
     if (!currentItem) return;
-    emit('play', { itemId: currentItem.id });
+    try {
+      await postPlaybackControl('play', { itemId: currentItem.id });
+    } catch (err) {
+      console.warn('[playback] HTTP play failed, trying socket:', err?.message || err);
+      emit('play', { itemId: currentItem.id });
+    }
   };
 
-  const handlePause = () => {
-    emit('pause', {});
+  const handlePause = async () => {
+    try {
+      await postPlaybackControl('pause');
+    } catch (err) {
+      console.warn('[playback] HTTP pause failed, trying socket:', err?.message || err);
+      emit('pause', {});
+    }
+  };
+
+  const handleStop = async () => {
+    try {
+      await postPlaybackControl('stop');
+    } catch (err) {
+      console.warn('[playback] HTTP stop failed, pausing locally:', err?.message || err);
+      emit('pause', {});
+    }
   };
 
   const handleSeek = (timestamp) => {
@@ -397,8 +446,13 @@ export default function RoomView({ theme, applyTheme }) {
     emit('remove-from-queue', { itemId });
   };
 
-  const handlePlayItem = (itemId) => {
-    emit('play', { itemId });
+  const handlePlayItem = async (itemId) => {
+    try {
+      await postPlaybackControl('play', { itemId });
+    } catch (err) {
+      console.warn('[playback] HTTP queue-item play failed, trying socket:', err?.message || err);
+      emit('play', { itemId });
+    }
   };
 
   const handleReaction = (emoji) => {
@@ -454,6 +508,7 @@ export default function RoomView({ theme, applyTheme }) {
           isHost={isHost}
           onPlay={handlePlay}
           onPause={handlePause}
+          onStop={handleStop}
           onSeek={handleSeek}
           onNext={handleNext}
           emit={emit}
