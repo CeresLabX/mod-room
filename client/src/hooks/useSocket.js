@@ -24,6 +24,7 @@ export function useSocket(handlers) {
       reconnectionDelay: 500,
       reconnectionDelayMax: 3000,
       timeout: 10000,
+      tryAllTransports: true,
       autoConnect: false,
     });
     socketRef.current = socket;

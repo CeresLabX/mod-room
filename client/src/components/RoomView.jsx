@@ -226,10 +226,11 @@ export default function RoomView({ theme, applyTheme }) {
 
     if (!socket.connected) {
       await new Promise((resolve, reject) => {
+        let lastConnectError = null;
         const timer = setTimeout(() => {
           cleanup();
-          reject(new Error('Could not reconnect to server'));
-        }, 8000);
+          reject(new Error(lastConnectError?.message || 'Could not reconnect to server'));
+        }, 10000);
         const cleanup = () => {
           clearTimeout(timer);
           socket.off('connect', onConnect);
@@ -240,11 +241,13 @@ export default function RoomView({ theme, applyTheme }) {
           resolve();
         };
         const onError = (err) => {
-          cleanup();
-          reject(err instanceof Error ? err : new Error(err?.message || 'Socket connection failed'));
+          // Do not fail on the first transport error. Some networks/Railway
+          // edges reject the WebSocket probe while polling still works.
+          lastConnectError = err instanceof Error ? err : new Error(err?.message || 'Socket connection failed');
+          console.warn('[socket] connect attempt failed, waiting for fallback/retry:', lastConnectError.message);
         };
-        socket.once('connect', onConnect);
-        socket.once('connect_error', onError);
+        socket.on('connect', onConnect);
+        socket.on('connect_error', onError);
         socket.connect();
       });
     }
