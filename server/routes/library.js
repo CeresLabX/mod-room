@@ -127,9 +127,6 @@ async function webdavList(webdavPath) {
   const xml = await response.text();
   const responses = parsePropfind(xml);
 
-  // No debug logging in production
-  void responses;
-
   const items = [];
   for (const item of responses) {
     if (!item.href) continue;
