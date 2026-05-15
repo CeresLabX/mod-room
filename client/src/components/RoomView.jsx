@@ -218,12 +218,74 @@ export default function RoomView({ theme, applyTheme }) {
     emit('next', {});
   };
 
-  const handleAddToQueue = async (item, options = {}) => {
-    if (!socketRef.current?.connected) {
-      throw new Error('Not connected to server');
+  const ensureSocketReady = useCallback(async () => {
+    const socket = socketRef.current;
+    if (!socket) {
+      throw new Error('Socket is not ready yet — try again in a moment');
     }
+
+    if (!socket.connected) {
+      await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          cleanup();
+          reject(new Error('Could not reconnect to server'));
+        }, 8000);
+        const cleanup = () => {
+          clearTimeout(timer);
+          socket.off('connect', onConnect);
+          socket.off('connect_error', onError);
+        };
+        const onConnect = () => {
+          cleanup();
+          resolve();
+        };
+        const onError = (err) => {
+          cleanup();
+          reject(err instanceof Error ? err : new Error(err?.message || 'Socket connection failed'));
+        };
+        socket.once('connect', onConnect);
+        socket.once('connect_error', onError);
+        socket.connect();
+      });
+    }
+
+    // If a page was left open across a deploy/reconnect, make sure this socket
+    // has rejoined the room before queue mutations. The server stores room
+    // membership per socket connection, so a connected-but-not-joined socket
+    // will correctly reject add-to-queue. Waiting for room-state removes that
+    // race instead of surfacing a misleading "not connected" error.
+    if (!roomData?.id) {
+      await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          cleanup();
+          reject(new Error('Joined server, but room sync timed out'));
+        }, 8000);
+        const cleanup = () => {
+          clearTimeout(timer);
+          socket.off('room-state', onRoomState);
+          socket.off('error', onSocketError);
+        };
+        const onRoomState = () => {
+          cleanup();
+          resolve();
+        };
+        const onSocketError = (data) => {
+          cleanup();
+          reject(new Error(data?.message || 'Room join failed'));
+        };
+        socket.once('room-state', onRoomState);
+        socket.once('error', onSocketError);
+        joinRoom(socket);
+      });
+    }
+
+    return socket;
+  }, [joinRoom, roomData?.id, socketRef]);
+
+  const handleAddToQueue = async (item, options = {}) => {
+    const socket = await ensureSocketReady();
     return new Promise((resolve, reject) => {
-      socketRef.current.timeout(8000).emit('add-to-queue', { item }, (err, response) => {
+      socket.timeout(8000).emit('add-to-queue', { item }, (err, response) => {
         if (err) {
           reject(err);
           return;
