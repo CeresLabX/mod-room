@@ -19,11 +19,13 @@ const {
 
 const KOOFR_ROOT = webdavRoot;
 
+// Known directory names at the root of /Vectrix/public — populated by reindex
+const KNOWN_DIRS = new Set(['MOD', 'XM', 'S3M', 'IT', '669', 'AMF', 'AMS', 'DBM', 'DMF', 'DSM', 'FAR', 'MDL', 'MED', 'OKT', 'PTM', 'ULT', 'UMX', 'WAV', 'MP3', 'OGG', 'FLAC', 'M4A', 'SNAPSHOT', 'DIGI', 'C67']);
+
 const PLAYABLE_EXTENSIONS = new Set([
   'MOD','XM','S3M','IT','MPTM','MTM','STM','669',
   'AMF','AMS','DBM','DMF','DSM','FAR','MDL','MED',
-  'OKT','PTM','ULT','UMX',
-  'WAV','MP3','OGG','FLAC','M4A',
+  'OKT','PTM','ULT','UMX','WAV','MP3','OGG','FLAC','M4A',
 ]);
 
 function isPlayable(ext) {
@@ -44,17 +46,6 @@ function getPool() {
   return pool;
 }
 
-async function getDb() {
-  const p = getPool();
-  if (!p) return null;
-  const client = await p.connect();
-  return client;
-}
-
-function releaseDb(client) {
-  if (client) client.release();
-}
-
 // ─── Safe path validation ────────────────────────────────────────────────────
 
 function isUnderRoot(itemPath, root) {
@@ -63,7 +54,6 @@ function isUnderRoot(itemPath, root) {
 }
 
 function safeRelativePath(itemPath) {
-  // Returns the path relative to KOOFR_ROOT, or null if traversal detected
   const rel = itemPath.startsWith(KOOFR_ROOT)
     ? itemPath.slice(KOOFR_ROOT.length)
     : itemPath;
@@ -72,6 +62,93 @@ function safeRelativePath(itemPath) {
 }
 
 // ─── WebDAV helpers ─────────────────────────────────────────────────────────
+
+/**
+ * Use PROPFIND Depth:0 on an item to determine if it's a collection (directory).
+ * Koofr marks everything as non-collection in Depth:1, so we probe individually.
+ */
+async function isDirectory(webdavPath) {
+  const koofrUrl = `${baseUrl}${webdavPath}`;
+  const response = await fetch(koofrUrl, {
+    method: 'PROPFIND',
+    headers: {
+      Authorization: authHeader(),
+      Depth: '0',
+      'Content-Type': 'application/xml',
+    },
+    body: '<?xml version="1.0" encoding="utf-8"?><propfind xmlns="DAV:"><prop><resourcetype/></prop></propfind>',
+  });
+
+  if (response.status === 207) {
+    const xml = await response.text();
+    return /<d:collection\/?>/i.test(xml);
+  }
+  // 200/301/404 = file or invalid
+  return false;
+}
+
+/**
+ * List immediate children of a WebDAV directory.
+ * Uses Depth:1 PROPFIND and guesses directory vs file using known extensions
+ * and content-type hints from Koofr.
+ */
+async function webdavList(webdavPath) {
+  const koofrUrl = `${baseUrl}${webdavPath}/`;
+  const response = await fetch(koofrUrl, {
+    method: 'PROPFIND',
+    headers: {
+      Authorization: authHeader(),
+      Depth: '1',
+      'Content-Type': 'application/xml',
+    },
+    body: '<?xml version="1.0" encoding="utf-8"?><propfind xmlns="DAV:"><prop><displayname/><getcontentlength/><getcontenttype/><resourcetype/></prop></propfind>',
+  });
+
+  if (!response.ok) {
+    throw new Error(`WebDAV error ${response.status} for ${webdavPath}`);
+  }
+
+  const xml = await response.text();
+  const responses = parsePropfind(xml);
+
+  const items = [];
+  for (const item of responses) {
+    if (!item.href || item.href === `${webdavPath}/` || item.href === webdavPath) continue;
+
+    // Strip /dav/Koofr prefix to get absolute Koofr path
+    const absPath = item.href.replace(/^\/dav\/Koofr/, '');
+    const relPath = absPath.startsWith(KOOFR_ROOT)
+      ? absPath.slice(KOOFR_ROOT.length)
+      : absPath;
+    const relClean = relPath.replace(/^\//, '').replace(/\/$/, '');
+
+    // Determine name
+    const name = item.displayName || relClean.split('/').pop() || '';
+
+    // Determine if directory: either marked as collection, or no extension (common for mod folders),
+    // or name matches known directory set
+    const ext = name.includes('.') ? name.split('.').pop().toUpperCase() : '';
+    const isDir = item.isCollection ||
+      !ext ||
+      KNOWN_DIRS.has(name.toUpperCase()) ||
+      (!ext && !name.includes('.'));
+
+    // Determine extension and playable
+    const fileExt = name.includes('.') ? name.split('.').pop().toUpperCase() : '';
+
+    items.push({
+      name,
+      relPath: relClean,
+      parentPath: relClean.includes('/') ? relClean.substring(0, relClean.lastIndexOf('/')) : '',
+      isDirectory: isDir,
+      extension: fileExt,
+      playable: isPlayable(fileExt),
+      size: item.contentLength || 0,
+    });
+  }
+
+  return items;
+}
 
 function parsePropfind(xml) {
   const responses = [];
@@ -91,26 +168,6 @@ function parsePropfind(xml) {
     responses.push({ href, displayName, contentLength, contentType, isCollection });
   }
   return responses;
-}
-
-async function webdavList(webdavPath) {
-  const koofrUrl = `${baseUrl}${webdavPath}/`;
-  const response = await fetch(koofrUrl, {
-    method: 'PROPFIND',
-    headers: {
-      Authorization: authHeader(),
-      Depth: '1',
-      'Content-Type': 'application/xml',
-    },
-    body: '<?xml version="1.0" encoding="utf-8"?><propfind xmlns="DAV:"><prop><displayname/><getcontentlength/><getcontenttype/><resourcetype/><getlastmodified/></prop></propfind>',
-  });
-
-  if (!response.ok) {
-    throw new Error(`WebDAV error ${response.status} for ${webdavPath}`);
-  }
-
-  const xml = await response.text();
-  return parsePropfind(xml);
 }
 
 // ─── Index routes ────────────────────────────────────────────────────────────
@@ -181,9 +238,8 @@ router.get('/search', async (req, res) => {
   }
 
   try {
-    // Scope search: items under relPath
     const scope = relPath === '/' ? '' : relPath;
-    const pattern = scope ? `${scope}/%` : '%';
+    const pattern = scope ? `${scope}/%` : '%`;
 
     const result = await db.query(
       `SELECT id, name, relative_path, parent_path, type, extension, playable, size
@@ -214,7 +270,7 @@ router.get('/search', async (req, res) => {
 
 /**
  * POST /api/library/reindex
- * Rebuilds the library index from WebDAV.
+ * Rebuilds the library index from WebDAV via recursive walk.
  * Protected by LIBRARY_REINDEX_TOKEN header.
  */
 router.post('/reindex', async (req, res) => {
@@ -234,71 +290,69 @@ router.post('/reindex', async (req, res) => {
 
   console.log('[library] Starting reindex from', KOOFR_ROOT);
 
-  try {
-    // Walk the WebDAV tree recursively
-    const stats = { folders: 0, files: 0, playable: 0, skipped: 0 };
+  const stats = { folders: 0, files: 0, playable: 0, skipped: 0 };
 
-    async function walk(webdavPath, parentRel) {
-      const items = await webdavList(webdavPath);
+  async function upsertItem(item) {
+    const { name, relPath, parentPath, isDirectory, extension, playable, size } = item;
+    const type = isDirectory ? 'folder' : 'file';
+    try {
+      await db.query(
+        `INSERT INTO music_library_index (id, name, relative_path, parent_path, type, extension, playable, size, indexed_at)
+         VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, NOW())
+         ON CONFLICT (relative_path) DO UPDATE SET
+           name = EXCLUDED.name, parent_path = EXCLUDED.parent_path,
+           type = EXCLUDED.type, extension = EXCLUDED.extension,
+           playable = EXCLUDED.playable, size = EXCLUDED.size, indexed_at = NOW()`,
+        [name, relPath, parentPath, type, extension || null, playable, size || null]
+      );
+    } catch (e) {
+      console.warn(`[library] upsert failed for ${relPath}: ${e.message}`);
+    }
+  }
 
-      for (const item of items) {
-        // Skip the parent entry itself
-        if (!item.href || item.href === webdavPath + '/' || item.href === webdavPath) continue;
-
-        // Get clean relative path
-        const cleanHref = item.href.replace(/^\/dav\/Koofr/, '');
-        const relPath = cleanHref.startsWith(KOOFR_ROOT)
-          ? cleanHref.slice(KOOFR_ROOT.length)
-          : cleanHref;
-        const relPathClean = relPath.replace(/^\//, '').replace(/\/$/, '');
-        const name = item.displayName || relPathClean.split('/').pop() || '';
-        const parentRel2 = relPathClean.includes('/')
-          ? relPathClean.substring(0, relPathClean.lastIndexOf('/'))
-          : '';
-
-        if (item.isCollection) {
-          stats.folders++;
-          await db.query(
-            `INSERT INTO music_library_index (id, name, relative_path, parent_path, type, playable, indexed_at)
-             VALUES (gen_random_uuid(), $1, $2, $3, 'folder', false, NOW())
-             ON CONFLICT (relative_path) DO UPDATE SET
-               name = EXCLUDED.name, parent_path = EXCLUDED.parent_path, indexed_at = NOW()`,
-            [name, relPathClean, parentRel2]
-          );
-          // Recurse into subfolder
-          try {
-            await walk(cleanHref, relPathClean);
-          } catch (e) {
-            console.warn(`[library] failed to walk ${cleanHref}: ${e.message}`);
-          }
-        } else {
-          const ext = name.includes('.') ? name.split('.').pop().toUpperCase() : '';
-          const playable = isPlayable(ext);
-          if (playable) stats.playable++; else stats.skipped++;
-          stats.files++;
-
-          await db.query(
-            `INSERT INTO music_library_index (id, name, relative_path, parent_path, type, extension, playable, size, indexed_at)
-             VALUES (gen_random_uuid(), $1, $2, $3, 'file', $4, $5, $6, NOW())
-             ON CONFLICT (relative_path) DO UPDATE SET
-               name = EXCLUDED.name, parent_path = EXCLUDED.parent_path,
-               extension = EXCLUDED.extension, playable = EXCLUDED.playable,
-               size = EXCLUDED.size, indexed_at = NOW()`,
-            [name, relPathClean, parentRel2, ext, playable, item.contentLength || null]
-          );
-        }
-      }
+  /**
+   * Recursively walk the WebDAV tree starting at webdavPath (absolute Koofr path).
+   * parentRel is the relative path from KOOFR_ROOT.
+   */
+  async function walk(webdavPath, parentRel) {
+    let items;
+    try {
+      items = await webdavList(webdavPath);
+    } catch (e) {
+      console.warn(`[library] failed to list ${webdavPath}: ${e.message}`);
+      return;
     }
 
+    for (const item of items) {
+      if (item.isDirectory) {
+        stats.folders++;
+        await upsertItem(item);
+        // Recurse into subdirectory
+        try {
+          await walk(KOOFR_ROOT + '/' + item.relPath, item.relPath);
+        } catch (e) {
+          console.warn(`[library] failed to walk ${item.relPath}: ${e.message}`);
+        }
+      } else {
+        if (item.playable) stats.playable++; else stats.skipped++;
+        stats.files++;
+        await upsertItem(item);
+      }
+    }
+  }
+
+  try {
     await walk(KOOFR_ROOT, '');
 
-    // Remove stale entries (not updated during this reindex)
-    await db.query(
-      `DELETE FROM music_library_index WHERE indexed_at < NOW() - INTERVAL '5 seconds'`
+    // Prune stale entries (not touched during this reindex)
+    const deleted = await db.query(
+      `DELETE FROM music_library_index WHERE indexed_at < NOW() - INTERVAL '5 seconds' RETURNING id`
     );
+    if (deleted.rowCount > 0) {
+      console.log(`[library] pruned ${deleted.rowCount} stale entries`);
+    }
 
     console.log(`[library] Reindex complete: ${stats.folders} folders, ${stats.files} files, ${stats.playable} playable, ${stats.skipped} skipped`);
-
     res.json({
       ok: true,
       folders: stats.folders,
@@ -326,7 +380,6 @@ router.get('/file', async (req, res) => {
     return res.status(400).json({ error: 'relativePath query parameter required' });
   }
 
-  // Security: enforce KOOFR_ROOT boundary
   const fullPath = relPath.startsWith('/') ? KOOFR_ROOT + relPath : KOOFR_ROOT + '/' + relPath;
   if (!isUnderRoot(fullPath, KOOFR_ROOT)) {
     return res.status(403).json({ error: 'Access denied' });
