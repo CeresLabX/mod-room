@@ -23,14 +23,15 @@ const KOOFR_ROOT = webdavRoot;
 const KNOWN_DIRS = new Set([
   'MOD', 'XM', 'S3M', 'IT', '669', 'AMF', 'AMS', 'DBM', 'DMF', 'DSM', 'FAR',
   'MDL', 'MED', 'OKT', 'PTM', 'ULT', 'UMX', 'SNAPSHOT', 'DIGI', 'C67',
-  'J2B', 'MO3', 'MT2', 'PLM', 'PSM', 'PTM', 'SFX', 'STP', 'SYMMOD',
-  'HVL', 'IMF', 'FMT', 'GDM', 'DTM', 'MT2',
+  'J2B', 'MO3', 'MT2', 'PLM', 'PSM', 'SFX', 'STP', 'SYMMOD',
+  'HVL', 'IMF', 'FMT', 'GDM', 'DTM',
 ]);
 
 const PLAYABLE_EXTENSIONS = new Set([
   'MOD','XM','S3M','IT','MPTM','MTM','STM','669',
   'AMF','AMS','DBM','DMF','DSM','FAR','MDL','MED',
-  'OKT','PTM','ULT','UMX','WAV','MP3','OGG','FLAC','M4A',
+  'OKT','PTM','ULT','UMX','DIGI','GDM','IMF','J2B',
+  'PSM','WAV','MP3','OGG','FLAC','M4A',
 ]);
 
 function isPlayable(ext) {
