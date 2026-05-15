@@ -343,19 +343,19 @@ Railway Persistent Volume (uploads/)
 - [x] Shared queue
 - [x] MP3 upload + playback
 - [x] WebSocket sync
-- [x] Basic visualizer
+- [x] Retro visualizer suite (10 visualizers: spectrum bars, oscilloscope, tracker meters, starfield pulse, VU meter deck, neon tunnel, plasma field, pixel equalizer, piano roll, matrix rain)
 
 ### Phase 2
 - [x] YouTube link support
 - [ ] MP4/video upload playback (ephemeral — files lost on redeploy)
-- [ ] Video + visualizer layout
+- [ ] Video + visualizer layout (visualizer hidden for YouTube/video)
 - [ ] Better queue controls
 
 ### Phase 3
 - [x] MOD/tracker playback via AudioWorklet
 - [ ] MOD seeking (pattern/row seeking)
 - [ ] MIDI + external SoundFont
-- [ ] Advanced visualizers (oscilloscope, tracker channels)
+- [x] Advanced visualizers (oscilloscope, tracker channels, starfield, VU meters, neon tunnel, plasma, pixel eq, piano roll, matrix rain)
 
 ### Phase 4
 - [ ] Activity log / reactions
