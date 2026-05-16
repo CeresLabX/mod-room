@@ -9,11 +9,25 @@ import { useRef, useState, useEffect, useCallback } from 'react';
 import { getAdapterForFile } from '../utils/getTrackerAdapter.js';
 import { AhxPlayerAdapter } from '../utils/AhxPlayerAdapter.js';
 
+const DEFAULT_VOLUME = 0.2;
+const VOLUME_KEY = 'modroom-volume';
+function loadSavedVolume() {
+  try {
+    const raw = localStorage.getItem(VOLUME_KEY);
+    if (raw === null) return DEFAULT_VOLUME;
+    const value = Number(raw);
+    return Number.isFinite(value) ? Math.min(1, Math.max(0.01, value / 100)) : DEFAULT_VOLUME;
+  } catch { return DEFAULT_VOLUME; }
+}
+function saveVolume(v) {
+  try { localStorage.setItem(VOLUME_KEY, String(Math.round(v * 100))); } catch {}
+}
+
 export function useTrackerPlayer({ item, audioContext, onEnded, onError }) {
   const [status, setStatus] = useState('idle'); // idle, loading, playing, paused, error
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [volume, setVolumeState] = useState(0.8);
+  const [volume, setVolumeState] = useState(loadSavedVolume);
   const [autoplayBlocked, setAutoplayBlocked] = useState(false);
   const [analyserNode, setAnalyserNode] = useState(null);
   const [metadata, setMetadata] = useState(null);
@@ -22,7 +36,7 @@ export function useTrackerPlayer({ item, audioContext, onEnded, onError }) {
   const adapterRef = useRef(null);
   const audioContextRef = useRef(null);
   const currentItemRef = useRef(null);
-  const volumeRef = useRef(0.8);
+  const volumeRef = useRef(loadSavedVolume());
   const positionTimerRef = useRef(null);
   const pendingPlayRef = useRef(false);
   const statusRef = useRef('idle');
@@ -227,10 +241,12 @@ export function useTrackerPlayer({ item, audioContext, onEnded, onError }) {
   }, []);
 
   const changeVolume = useCallback((v) => {
-    volumeRef.current = v;
-    setVolumeState(v);
+    const next = Math.min(1, Math.max(0.01, Number(v) || DEFAULT_VOLUME));
+    volumeRef.current = next;
+    setVolumeState(next);
+    saveVolume(next);
     if (adapterRef.current) {
-      adapterRef.current.setVolume(v);
+      adapterRef.current.setVolume(next);
     }
   }, []);
 

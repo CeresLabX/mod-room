@@ -12,6 +12,24 @@ import { useRef, useState, useEffect, useCallback } from 'react';
 import { loadWorkletFromBuffer } from 'modplayer';
 import { Protracker } from 'modplayer';
 
+const DEFAULT_VOLUME = 0.2;
+const VOLUME_KEY = 'modroom-volume';
+
+function loadSavedVolume() {
+  try {
+    const raw = localStorage.getItem(VOLUME_KEY);
+    if (raw === null) return DEFAULT_VOLUME;
+    const value = Number(raw);
+    return Number.isFinite(value) ? Math.min(1, Math.max(0.01, value / 100)) : DEFAULT_VOLUME;
+  } catch {
+    return DEFAULT_VOLUME;
+  }
+}
+
+function saveVolume(v) {
+  try { localStorage.setItem(VOLUME_KEY, String(Math.round(v * 100))); } catch {}
+}
+
 // Cache the worklet URL so it's only fetched/registered once
 let workletUrlCache = null;
 let workletLoadPromise = null;
@@ -56,7 +74,7 @@ export function useModPlayer({ item, onEnded, onError }) {
   const [status, setStatus] = useState('idle'); // idle, loading, playing, paused, error
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [volume, setVolumeState] = useState(0.8);
+  const [volume, setVolumeState] = useState(loadSavedVolume);
   const [autoplayBlocked, setAutoplayBlocked] = useState(false);
   const [analyserNode, setAnalyserNode] = useState(null);
 
@@ -65,7 +83,9 @@ export function useModPlayer({ item, onEnded, onError }) {
   const gainRef = useRef(null);
   const analyserRef = useRef(null);
   const currentItemRef = useRef(null);
-  const volumeRef = useRef(0.8);
+  const volumeRef = useRef(loadSavedVolume());
+  const [channelEnabled, setChannelEnabled] = useState(() => Array(16).fill(true));
+  const channelEnabledRef = useRef(Array(16).fill(true));
   const positionTimerRef = useRef(null);
   const pendingPlayRef = useRef(false);
   const statusRef = useRef('idle');
@@ -155,6 +175,9 @@ export function useModPlayer({ item, onEnded, onError }) {
       const ext = (newItem.filename || newItem.url).split('.').pop().toLowerCase();
       const workletNode = loadWorkletFromBuffer(ext, uint8, ctx, {
         options: { autoplay: true, repeat: false },
+      });
+      channelEnabledRef.current.forEach((enabled, channel) => {
+        workletNode.port.postMessage({ type: 'set-channel-muted', channel, muted: !enabled });
       });
 
       // Reconnect to our gain/analyser chain
@@ -297,11 +320,29 @@ export function useModPlayer({ item, onEnded, onError }) {
   }, []);
 
   const changeVolume = useCallback((v) => {
-    volumeRef.current = v;
-    setVolumeState(v);
+    const next = Math.min(1, Math.max(0.01, Number(v) || DEFAULT_VOLUME));
+    volumeRef.current = next;
+    setVolumeState(next);
+    saveVolume(next);
     if (gainRef.current) {
-      gainRef.current.gain.value = v;
+      gainRef.current.gain.value = next;
     }
+  }, []);
+
+  const setChannelEnabledAt = useCallback((channel, enabled) => {
+    const index = Math.max(0, Math.min(15, Number(channel) || 0));
+    const nextEnabled = Boolean(enabled);
+    setChannelEnabled(prev => {
+      const next = [...prev];
+      next[index] = nextEnabled;
+      channelEnabledRef.current = next;
+      return next;
+    });
+    workletNodeRef.current?.port?.postMessage({
+      type: 'set-channel-muted',
+      channel: index,
+      muted: !nextEnabled,
+    });
   }, []);
 
   const clearAutoplayBlocked = useCallback(() => {
@@ -362,6 +403,8 @@ export function useModPlayer({ item, onEnded, onError }) {
     stop,
     seek,
     changeVolume,
+    channelEnabled,
+    setChannelEnabledAt,
     syncTo: () => {}, // MOD seeking not yet supported
     loadItem,
   };

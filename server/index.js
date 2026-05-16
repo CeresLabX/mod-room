@@ -159,6 +159,7 @@ io.on('connection', (socket) => {
         playbackStatus: room.playback_status,
         playbackTimestamp: room.playback_timestamp,
         currentItemId: room.current_item_id,
+        visualizerId: room.visualizer_id || 'spectrum',
         serverTime: Date.now(),
         expectedPositionMs,
       },
@@ -488,6 +489,19 @@ io.on('connection', (socket) => {
     if (!currentRoom) return;
     const roomSyncState = roomSync.getOrCreateActiveRoom(currentRoom);
     roomSync.broadcastPlaybackState(io, currentRoom);
+  });
+
+  socket.on('visualizer-select', async ({ visualizerId }) => {
+    if (!currentRoom || !currentNickname) return;
+    const safeId = sanitize(String(visualizerId || 'spectrum')).slice(0, 40);
+    if (!/^[a-z0-9-]+$/i.test(safeId)) return;
+    const db = getDb();
+    await db.query('UPDATE rooms SET visualizer_id = $1, updated_at = NOW() WHERE id = $2', [safeId, currentRoom]);
+    io.to(currentRoom).emit('visualizer-update', {
+      visualizerId: safeId,
+      nickname: currentNickname,
+      ts: Date.now(),
+    });
   });
 
   socket.on('reaction', async ({ emoji }) => {

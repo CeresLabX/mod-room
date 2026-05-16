@@ -72,6 +72,7 @@ async function runMigrations() {
   await db.query(`CREATE INDEX IF NOT EXISTS idx_queue_items_room_id ON queue_items(room_id);`);
   await db.query(`CREATE INDEX IF NOT EXISTS idx_room_participants_room_id ON room_participants(room_id);`);
   await db.query(`ALTER TABLE rooms ADD COLUMN IF NOT EXISTS last_command_id VARCHAR(64);`);
+  await db.query(`ALTER TABLE rooms ADD COLUMN IF NOT EXISTS visualizer_id VARCHAR(40) DEFAULT 'spectrum';`);
 
   await db.query(`CREATE INDEX IF NOT EXISTS idx_rooms_updated_at ON rooms(updated_at);`);
 

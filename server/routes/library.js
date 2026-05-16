@@ -4,6 +4,7 @@
  */
 
 const express = require('express');
+const path = require('path');
 const { pipeline } = require('stream/promises');
 const { Readable } = require('stream');
 const router = express.Router();
@@ -55,17 +56,32 @@ function getPool() {
 
 // ─── Safe path validation ────────────────────────────────────────────────────
 
-function isUnderRoot(itemPath, root) {
-  if (itemPath === root) return true;
-  return itemPath.startsWith(root + '/');
+function normalizeRoot(root) {
+  return '/' + path.posix.normalize('/' + String(root || '').replace(/^\/+/, '')).replace(/^\/+/, '').replace(/\/+$/, '');
 }
 
-function safeRelativePath(itemPath) {
-  const rel = itemPath.startsWith(KOOFR_ROOT)
-    ? itemPath.slice(KOOFR_ROOT.length)
-    : itemPath;
-  if (rel.startsWith('..') || rel.includes('/..')) return null;
-  return rel || '/';
+const LOCKED_ROOT = normalizeRoot(KOOFR_ROOT);
+
+function safeRelativePath(itemPath = '') {
+  let raw = String(itemPath || '').trim();
+  try { raw = decodeURIComponent(raw); } catch {}
+  raw = raw.replace(/\\/g, '/').replace(/\0/g, '');
+
+  // UI paths are relative to the locked root. Absolute WebDAV paths are only
+  // accepted if they are inside that root; parent traversal is normalized away
+  // then rejected if it would escape.
+  let rel = raw.startsWith(LOCKED_ROOT) ? raw.slice(LOCKED_ROOT.length) : raw;
+  rel = rel.replace(/^\/+/, '');
+  if (rel.split('/').some(part => part === '..')) return null;
+  const normalized = path.posix.normalize('/' + rel);
+  const clean = normalized.replace(/^\/+/, '');
+  return clean ? '/' + clean : '/';
+}
+
+function fullPathFromRelative(relPath) {
+  const safe = safeRelativePath(relPath);
+  if (!safe) return null;
+  return safe === '/' ? LOCKED_ROOT : LOCKED_ROOT + safe;
 }
 
 // ─── WebDAV helpers ─────────────────────────────────────────────────────────
@@ -205,7 +221,8 @@ router.get('/', async (req, res) => {
     return res.status(503).json({ error: 'Library not configured' });
   }
 
-  const relPath = safeRelativePath(req.query.path || KOOFR_ROOT) || KOOFR_ROOT;
+  const relPath = safeRelativePath(req.query.path || '/');
+  if (!relPath) return res.status(403).json({ error: 'Access denied' });
   const parentPath = relPath === '/' ? '' : relPath;
 
   const db = getPool();
@@ -249,7 +266,8 @@ router.get('/search', async (req, res) => {
     return res.status(503).json({ error: 'Library not configured' });
   }
 
-  const relPath = safeRelativePath(req.query.path || KOOFR_ROOT) || KOOFR_ROOT;
+  const relPath = safeRelativePath(req.query.path || '/');
+  if (!relPath) return res.status(403).json({ error: 'Access denied' });
   const q = (req.query.q || '').trim();
 
   if (!q) {
@@ -427,8 +445,8 @@ router.get('/file', async (req, res) => {
     return res.status(400).json({ error: 'relativePath query parameter required' });
   }
 
-  const fullPath = relPath.startsWith('/') ? KOOFR_ROOT + relPath : KOOFR_ROOT + '/' + relPath;
-  if (!isUnderRoot(fullPath, KOOFR_ROOT)) {
+  const fullPath = fullPathFromRelative(relPath);
+  if (!fullPath) {
     return res.status(403).json({ error: 'Access denied' });
   }
 

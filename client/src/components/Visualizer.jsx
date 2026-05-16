@@ -236,17 +236,19 @@ function saveVisualizer(id) {
   } catch {}
 }
 
-export default function Visualizer({ analyserNode, status }) {
-  const [selected, setSelected] = useState(loadSavedVisualizer);
+export default function Visualizer({ analyserNode, status, selected: selectedProp, onSelect }) {
+  const [selectedLocal, setSelectedLocal] = useState(loadSavedVisualizer);
+  const selected = selectedProp || selectedLocal;
   const [LazyComp, setLazyComp] = useState(null);
   const lazyModRef = useRef(null);
 
   const handleSelect = useCallback((id) => {
-    setSelected(id);
+    setSelectedLocal(id);
     saveVisualizer(id);
     setLazyComp(null);
     lazyModRef.current = null;
-  }, []);
+    onSelect?.(id);
+  }, [onSelect]);
 
   // Load lazy component when selected changes to a lazy one
   useEffect(() => {

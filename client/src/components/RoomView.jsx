@@ -26,6 +26,7 @@ export default function RoomView({ theme, applyTheme }) {
   const [currentItem, setCurrentItem] = useState(null);
   const [showAddMedia, setShowAddMedia] = useState(false);
   const [error, setError] = useState('');
+  const [visualizerId, setVisualizerId] = useState('spectrum');
 
   const playbackRef = useRef({ status: 'idle', itemId: null, timestamp: 0 });
   const queueRef = useRef([]);
@@ -41,6 +42,7 @@ export default function RoomView({ theme, applyTheme }) {
     setRoomData(data.room);
     setQueue(data.queue || []);
     setUsers(data.users || []);
+    setVisualizerId(data.room?.visualizerId || 'spectrum');
     queueRef.current = data.queue || [];
     usersRef.current = data.users || [];
 
@@ -73,6 +75,7 @@ export default function RoomView({ theme, applyTheme }) {
     setRoomData(room);
     setQueue(nextQueue);
     setUsers(nextUsers);
+    setVisualizerId(room?.visualizerId || 'spectrum');
     queueRef.current = nextQueue;
     usersRef.current = nextUsers;
 
@@ -204,6 +207,10 @@ export default function RoomView({ theme, applyTheme }) {
     // Player component will handle seek via syncTo in its sync effect
   }, []);
 
+  const handleVisualizerUpdate = useCallback((data) => {
+    if (data?.visualizerId) setVisualizerId(data.visualizerId);
+  }, []);
+
   const handleError = useCallback((data) => {
     setError(data.message);
     setTimeout(() => setError(''), 5000);
@@ -224,6 +231,7 @@ export default function RoomView({ theme, applyTheme }) {
     onActivity: handleActivity,
     onReaction: onReactionFromServer,
     onSeek: onSeekFromServer,
+    onVisualizerUpdate: handleVisualizerUpdate,
     onError: handleError,
   });
 
@@ -459,6 +467,11 @@ export default function RoomView({ theme, applyTheme }) {
     emit('reaction', { emoji });
   };
 
+  const handleVisualizerSelect = (id) => {
+    setVisualizerId(id);
+    emit('visualizer-select', { visualizerId: id });
+  };
+
   const THEMES = [
     { id: 'dos', label: 'DOS' },
     { id: 'amiga', label: 'AMG' },
@@ -512,6 +525,8 @@ export default function RoomView({ theme, applyTheme }) {
           onSeek={handleSeek}
           onNext={handleNext}
           emit={emit}
+          visualizerId={visualizerId}
+          onVisualizerSelect={handleVisualizerSelect}
         />
 
         <QueuePanel

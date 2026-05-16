@@ -128,7 +128,8 @@ router.get('/:roomId', async (req, res) => {
       playbackStatus: room.playback_status,
       playbackTimestamp: room.playback_timestamp,
       currentItemId: room.current_item_id,
-      queue: queueRes.rows.map(q => ({
+      visualizerId: room.visualizer_id || 'spectrum',
+      queue: queueRes.rows.map(q => ({ 
         id: q.id, title: q.title, mediaType: q.media_type, url: q.url,
         filename: q.filename, format: q.format, duration: q.duration,
         addedBy: q.added_by, position: q.position,

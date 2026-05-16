@@ -101,3 +101,29 @@ assets/MatrixRain-D3K63co_.js        ~2.5 KB
 - ✅ Main bundle confirmed to contain all 10 visualizer names + `visualizer-selector`
 - ✅ Health check: `GET /api/health` → `200 {"status":"ok"}`
 - ✅ No new dependencies introduced
+
+---
+
+# Feature/Bug Fix Batch — Room Sync, Controls, Layout, Security
+
+## Implemented
+
+- Added 16 visible MOD channel toggles (`CH01`–`CH16`) in the player panel for `.mod` playback.
+- Patched the `modplayer` worklet at build time so channel mute/unmute messages affect individual tracker channels in real time.
+- Changed volume controls to a 1–100 scale with default 20, preserving saved user preference via `localStorage`.
+- Synced visualizer selection through room state:
+  - stored as `rooms.visualizer_id`
+  - sent in room snapshots
+  - broadcast through `visualizer-update`
+  - new joiners inherit the active room visualizer
+- Tightened 1080p layout so queue and activity panels stay independently scrollable without stretching the page.
+- Rebuilt VU Meter Deck into a polished retro stereo meter + 16-channel activity deck.
+- Reworked Neon Tunnel for faster motion, stronger beat/volume response, and bounded lightweight canvas rendering.
+- Hardened `/api/library` and `/api/library/file` path handling with server-side root locking and parent traversal rejection.
+
+## Verification
+
+- ✅ `npm run build` succeeds from `client/`.
+- ✅ Server files pass `node --check`.
+- ✅ Built assets include channel-mute worklet message handling.
+- ✅ Built client includes visualizer room sync, volume preference/default, and channel controls.

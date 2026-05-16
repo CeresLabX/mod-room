@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && node -e \"const fs=require('fs');fs.copyFileSync('node_modules/chiptune3/libopenmpt.worklet.js','../server/public/assets/libopenmpt.worklet.js');console.log('libopenmpt.worklet.js copied to server/public/assets/')\"",
+    "build": "node scripts/patch-modplayer.cjs && vite build && node -e \"const fs=require('fs');fs.copyFileSync('node_modules/chiptune3/libopenmpt.worklet.js','../server/public/assets/libopenmpt.worklet.js');console.log('libopenmpt.worklet.js copied to server/public/assets/')\"",
     "preview": "vite preview"
   },
   "dependencies": {

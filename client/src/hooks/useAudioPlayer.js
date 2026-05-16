@@ -1,11 +1,25 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { getPlayer } from '../utils/mediaHandler.js';
 
+const DEFAULT_VOLUME = 0.2;
+const VOLUME_KEY = 'modroom-volume';
+function loadSavedVolume() {
+  try {
+    const raw = localStorage.getItem(VOLUME_KEY);
+    if (raw === null) return DEFAULT_VOLUME;
+    const value = Number(raw);
+    return Number.isFinite(value) ? Math.min(1, Math.max(0.01, value / 100)) : DEFAULT_VOLUME;
+  } catch { return DEFAULT_VOLUME; }
+}
+function saveVolume(v) {
+  try { localStorage.setItem(VOLUME_KEY, String(Math.round(v * 100))); } catch {}
+}
+
 export function useAudioPlayer({ item, onEnded, onError }) {
   const [status, setStatus] = useState('idle'); // idle, loading, playing, paused, error
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [volume, setVolume] = useState(0.8);
+  const [volume, setVolume] = useState(loadSavedVolume);
   const [autoplayBlocked, setAutoplayBlocked] = useState(false);
   const [analyserNode, setAnalyserNode] = useState(null);
   const playerRef = useRef(null);
@@ -219,8 +233,10 @@ export function useAudioPlayer({ item, onEnded, onError }) {
   }, []);
 
   const changeVolume = useCallback((v) => {
-    setVolume(v);
-    if (playerRef.current) playerRef.current.volume = v;
+    const next = Math.min(1, Math.max(0.01, Number(v) || DEFAULT_VOLUME));
+    setVolume(next);
+    saveVolume(next);
+    if (playerRef.current) playerRef.current.volume = next;
   }, []);
 
   const clearAutoplayBlocked = useCallback(() => {

@@ -39,7 +39,7 @@ function formatTime(s) {
   return `${m}:${sec.toString().padStart(2, '0')}`;
 }
 
-export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onPause, onStop, onSeek, onNext, emit }) {
+export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onPause, onStop, onSeek, onNext, emit, visualizerId, onVisualizerSelect }) {
   const [showVideo, setShowVideo] = useState(false);
   const [localStatus, setLocalStatus] = useState('idle');
   const [showFormatInfo, setShowFormatInfo] = useState(false);
@@ -82,6 +82,7 @@ export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onP
     status, currentTime, duration, volume, analyserNode, analyserRef, animFrameRef,
     playerRef, play, pause, stop, seek, changeVolume, syncTo,
     autoplayBlocked, clearAutoplayBlocked, metadata,
+    channelEnabled, setChannelEnabledAt,
   } = active;
 
   const progressPct = duration ? Math.min(100, Math.max(0, (currentTime / duration) * 100)) : 0;
@@ -182,7 +183,7 @@ export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onP
   };
 
   const handleVolumeChange = (e) => {
-    changeVolume(parseFloat(e.target.value));
+    changeVolume(parseInt(e.target.value, 10) / 100);
   };
 
   const handlePlayPause = () => {
@@ -287,6 +288,8 @@ export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onP
             animFrameRef={animFrameRef}
             playerRef={playerRef}
             status={status}
+            selected={visualizerId}
+            onSelect={onVisualizerSelect}
           />
         )}
       </div>
@@ -303,9 +306,24 @@ export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onP
         </div>
 
         {isPureMod && (
-          <div className="text-dim text-xs" style={{ textAlign: 'center', marginTop: 4, marginBottom: 4 }}>
-            ⓘ Seeking not supported for .MOD files
-          </div>
+          <>
+            <div className="text-dim text-xs" style={{ textAlign: 'center', marginTop: 4, marginBottom: 4 }}>
+              ⓘ Seeking not supported for .MOD files
+            </div>
+            <div className="channel-control-grid" aria-label="MOD channel controls">
+              {(channelEnabled || Array(16).fill(true)).map((enabled, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  className={`channel-toggle ${enabled ? 'enabled' : 'disabled'}`}
+                  onClick={() => setChannelEnabledAt?.(i, !enabled)}
+                  title={`${enabled ? 'Mute' : 'Enable'} MOD channel ${i + 1}`}
+                >
+                  CH{String(i + 1).padStart(2, '0')} {enabled ? 'ON' : 'OFF'}
+                </button>
+              ))}
+            </div>
+          </>
         )}
 
         <div className="player-controls">
@@ -354,14 +372,14 @@ export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onP
           <input
             type="range"
             className="volume-slider"
-            min="0"
-            max="1"
-            step="0.05"
-            value={volume}
+            min="1"
+            max="100"
+            step="1"
+            value={Math.round(volume * 100)}
             onChange={handleVolumeChange}
           />
           <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--dim)' }}>
-            {Math.round(volume * 100)}%
+            {Math.round(volume * 100)}
           </span>
         </div>
       </div>
