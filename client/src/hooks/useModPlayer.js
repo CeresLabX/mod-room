@@ -62,6 +62,7 @@ export function useModPlayer({ item, onEnded, onError }) {
 
   const audioContextRef = useRef(null);
   const workletNodeRef = useRef(null);
+  const gainRef = useRef(null);
   const analyserRef = useRef(null);
   const currentItemRef = useRef(null);
   const volumeRef = useRef(0.8);
@@ -96,11 +97,19 @@ export function useModPlayer({ item, onEnded, onError }) {
     const workletUrl = await getWorkletUrl();
     await ctx.audioWorklet.addModule(workletUrl);
 
-    // Create analyser
+    // Create gain + analyser chain. MOD worklet nodes do not expose a
+    // working `.volume` property, so volume must be controlled via GainNode.
+    const gain = ctx.createGain();
+    gain.gain.value = volumeRef.current;
+    gainRef.current = gain;
+
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 128;
     analyserRef.current = analyser;
     setAnalyserNode(analyser);
+
+    gain.connect(analyser);
+    analyser.connect(ctx.destination);
 
     return ctx;
   }, []);
@@ -147,9 +156,8 @@ export function useModPlayer({ item, onEnded, onError }) {
         options: { autoplay: true, repeat: false },
       });
 
-      // Reconnect to our analyser chain
-      workletNode.connect(analyserRef.current);
-      analyserRef.current.connect(ctx.destination);
+      // Reconnect to our gain/analyser chain
+      workletNode.connect(gainRef.current);
       workletNodeRef.current = workletNode;
 
       // Estimate duration by simulating the Protracker engine to the actual end
@@ -290,8 +298,8 @@ export function useModPlayer({ item, onEnded, onError }) {
   const changeVolume = useCallback((v) => {
     volumeRef.current = v;
     setVolumeState(v);
-    if (workletNodeRef.current) {
-      workletNodeRef.current.volume = v;
+    if (gainRef.current) {
+      gainRef.current.gain.value = v;
     }
   }, []);
 
@@ -324,6 +332,12 @@ export function useModPlayer({ item, onEnded, onError }) {
       if (positionTimerRef.current) clearInterval(positionTimerRef.current);
       if (workletNodeRef.current) {
         try { workletNodeRef.current.disconnect(); } catch {}
+      }
+      if (gainRef.current) {
+        try { gainRef.current.disconnect(); } catch {}
+      }
+      if (analyserRef.current) {
+        try { analyserRef.current.disconnect(); } catch {}
       }
       if (audioContextRef.current) {
         try { audioContextRef.current.close(); } catch {}

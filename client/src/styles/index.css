@@ -576,18 +576,19 @@ label {
   padding: 8px;
   overflow: hidden;
   display: flex;
-  align-items: stretch;
-  justify-content: center;
+  align-items: flex-end;
+  justify-content: stretch;
   gap: 2px;
 }
 
 .eq-bar {
-  width: 16px;
+  flex: 1 1 0;
+  width: auto;
+  min-width: 2px;
   background: var(--primary);
   box-shadow: var(--glow-primary);
   transition: height 0.05s ease;
-  display: flex;
-  flex-direction: column-reverse;
+  display: block;
 }
 
 .eq-bar:nth-child(odd) { background: var(--accent); box-shadow: var(--glow-accent); }
