@@ -10,14 +10,17 @@ function lerp(a, b, t) { return a + (b - a) * t; }
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
 export default function PlasmaField({ analyserNode, status }) {
+  const containerRef = useRef(null);
   const canvasRef = useRef(null);
   const rafRef = useRef(null);
   const timeRef = useRef(0);
+  const sizeRef = useRef({ W: 0, H: 0 });
   const [energy, setEnergy] = useState(0.3);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
     const ctx = canvas.getContext('2d');
 
     const primary = getCSSColor('--primary', '#00FF41');
@@ -31,18 +34,38 @@ export default function PlasmaField({ analyserNode, status }) {
       dataArray = new Uint8Array(bufferLength);
     }
 
-    // Low-res pixel effect — draw to offscreen then scale
+    // Offscreen canvas for low-res plasma — maintains aspect ratio
     const offCanvas = document.createElement('canvas');
     const offCtx = offCanvas.getContext('2d');
-    const PIXEL = 4; // block size
-    offCanvas.width = 100;
-    offCanvas.height = 30;
+    const OFF_W = 120;
+    const OFF_H = 40;
+    offCanvas.width = OFF_W;
+    offCanvas.height = OFF_H;
+
+    const syncSize = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = container.getBoundingClientRect();
+      const W = Math.floor(rect.width);
+      const H = Math.floor(rect.height);
+      if (W === 0 || H === 0) return;
+      if (W !== sizeRef.current.W || H !== sizeRef.current.H) {
+        canvas.width = W * dpr;
+        canvas.height = H * dpr;
+        canvas.style.width = W + 'px';
+        canvas.style.height = H + 'px';
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        sizeRef.current = { W, H };
+      }
+    };
+
+    const ro = new ResizeObserver(syncSize);
+    ro.observe(container);
+    syncSize();
 
     const draw = () => {
-      const W = canvas.width;
-      const H = canvas.height;
+      const { W, H } = sizeRef.current;
+      if (W === 0 || H === 0) { rafRef.current = requestAnimationFrame(draw); return; }
 
-      // Get audio energy
       let e = 0.3;
       if (analyserNode && dataArray) {
         analyserNode.getByteFrequencyData(dataArray);
@@ -59,29 +82,25 @@ export default function PlasmaField({ analyserNode, status }) {
       }
 
       const t = timeRef.current;
-      const offW = offCanvas.width;
-      const offH = offCanvas.height;
 
       // Plasma function
       const plasma = (x, y) => {
         const v1 = Math.sin(x * 0.1 + t * 1.1);
         const v2 = Math.sin((y * 0.1 + t * 0.9) * 0.5 + t * 0.7);
         const v3 = Math.sin((x * 0.1 + y * 0.1 + t * 1.3) * 0.5);
-        const dx = x - offW / 2;
-        const dy = y - offH / 2;
+        const dx = x - OFF_W / 2;
+        const dy = y - OFF_H / 2;
         const v4 = Math.sin(Math.sqrt(dx * dx + dy * dy) * 0.1 + t * 1.7);
         return (v1 + v2 + v3 + v4) / 4;
       };
 
-      // Draw low-res plasma
-      const imgData = offCtx.createImageData(offW, offH);
+      const imgData = offCtx.createImageData(OFF_W, OFF_H);
       const data = imgData.data;
-      for (let py = 0; py < offH; py++) {
-        for (let px = 0; px < offW; px++) {
-          const v = plasma(px, py); // -1 to 1
-          const t2 = (v + 1) * 0.5; // 0 to 1
+      for (let py = 0; py < OFF_H; py++) {
+        for (let px = 0; px < OFF_W; px++) {
+          const v = plasma(px, py);
+          const t2 = (v + 1) * 0.5;
 
-          // Color cycling through primary → accent → highlight → primary
           let r, g, b;
           if (t2 < 0.33) {
             const tt = t2 / 0.33;
@@ -100,7 +119,7 @@ export default function PlasmaField({ analyserNode, status }) {
             b = Math.floor(lerp(255, 0, tt));
           }
 
-          const idx = (py * offW + px) * 4;
+          const idx = (py * OFF_W + px) * 4;
           data[idx] = clamp(r + e * 40, 0, 255);
           data[idx + 1] = clamp(g + e * 20, 0, 255);
           data[idx + 2] = clamp(b, 0, 255);
@@ -109,11 +128,10 @@ export default function PlasmaField({ analyserNode, status }) {
       }
       offCtx.putImageData(imgData, 0, 0);
 
-      // Clear main canvas
       ctx.fillStyle = '#000';
       ctx.fillRect(0, 0, W, H);
 
-      // Scale up plasma with glow
+      // Scale plasma to fill canvas
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(offCanvas, 0, 0, W, H);
 
@@ -123,9 +141,8 @@ export default function PlasmaField({ analyserNode, status }) {
         ctx.fillRect(0, y, W, 1);
       }
 
-      // Glow overlay based on energy
       if (e > 0.4) {
-        const grad = ctx.createRadialGradient(W/2, H/2, 0, W/2, H/2, W * 0.6);
+        const grad = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, W * 0.6);
         grad.addColorStop(0, accent + Math.floor((e - 0.4) * 100).toString(16).padStart(2, '0'));
         grad.addColorStop(1, 'transparent');
         ctx.fillStyle = grad;
@@ -137,17 +154,15 @@ export default function PlasmaField({ analyserNode, status }) {
     };
 
     rafRef.current = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(rafRef.current);
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      ro.disconnect();
+    };
   }, [analyserNode, status]);
 
   return (
-    <div className="visualizer-display" style={{ padding: 0 }}>
-      <canvas
-        ref={canvasRef}
-        width={400}
-        height={120}
-        style={{ width: '100%', height: '100%', background: '#000' }}
-      />
+    <div className="visualizer-display" style={{ padding: 0 }} ref={containerRef}>
+      <canvas ref={canvasRef} style={{ width: '100%', height: '100%', background: '#000' }} />
     </div>
   );
 }

@@ -61,26 +61,49 @@ function SpectrumBars({ analyserNode }) {
 }
 
 function Oscilloscope({ analyserNode }) {
+  const containerRef = useRef(null);
   const canvasRef = useRef(null);
   const rafRef = useRef(null);
+  const sizeRef = useRef({ W: 0, H: 0 });
 
   useEffect(() => {
     if (!analyserNode) return;
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
     const ctx = canvas.getContext('2d');
 
     const bufferLength = analyserNode.frequencyBinCount;
     const timeData = new Uint8Array(bufferLength);
 
-    const getColor = (v) =>
+    const syncSize = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = container.getBoundingClientRect();
+      const W = Math.floor(rect.width);
+      const H = Math.floor(rect.height);
+      if (W === 0 || H === 0) return;
+      if (W !== sizeRef.current.W || H !== sizeRef.current.H) {
+        canvas.width = W * dpr;
+        canvas.height = H * dpr;
+        canvas.style.width = W + 'px';
+        canvas.style.height = H + 'px';
+        ctx.scale(dpr, dpr);
+        sizeRef.current = { W, H };
+      }
+    };
+
+    const ro = new ResizeObserver(syncSize);
+    ro.observe(container);
+    syncSize();
+
+    const getColor = () =>
       getComputedStyle(document.documentElement).getPropertyValue('--primary').trim() || '#00FF41';
     const getDim = () =>
       getComputedStyle(document.documentElement).getPropertyValue('--dim').trim() || '#008844';
 
     const draw = () => {
-      const W = canvas.width;
-      const H = canvas.height;
+      const { W, H } = sizeRef.current;
+      if (W === 0 || H === 0) { rafRef.current = requestAnimationFrame(draw); return; }
       analyserNode.getByteTimeDomainData(timeData);
 
       ctx.fillStyle = 'rgba(0,0,0,0.3)';
@@ -116,17 +139,15 @@ function Oscilloscope({ analyserNode }) {
     };
 
     rafRef.current = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(rafRef.current);
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      ro.disconnect();
+    };
   }, [analyserNode]);
 
   return (
-    <div className="visualizer-display" style={{ padding: 0 }}>
-      <canvas
-        ref={canvasRef}
-        width={400}
-        height={100}
-        style={{ width: '100%', height: '100%', background: '#000' }}
-      />
+    <div className="visualizer-display" style={{ padding: 0 }} ref={containerRef}>
+      <canvas ref={canvasRef} style={{ width: '100%', height: '100%', background: '#000' }} />
     </div>
   );
 }

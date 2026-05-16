@@ -6,7 +6,6 @@ function getCSSColor(varName, fallback) {
   return getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || fallback;
 }
 
-// Simple 3D math utilities
 function rotateX(p, a) {
   const c = Math.cos(a), s = Math.sin(a);
   return { x: p.x, y: p.y * c - p.z * s, z: p.y * s + p.z * c };
@@ -21,14 +20,17 @@ function project(p, W, H, fov) {
 }
 
 export default function NeonTunnel({ analyserNode, status }) {
+  const containerRef = useRef(null);
   const canvasRef = useRef(null);
   const rafRef = useRef(null);
   const timeRef = useRef(0);
+  const sizeRef = useRef({ W: 0, H: 0 });
   const [bars, setBars] = useState([0, 0, 0, 0, 0, 0, 0, 0]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
     const ctx = canvas.getContext('2d');
 
     const primary = getCSSColor('--primary', '#00FF41');
@@ -42,11 +44,30 @@ export default function NeonTunnel({ analyserNode, status }) {
       dataArray = new Uint8Array(bufferLength);
     }
 
-    const draw = () => {
-      const W = canvas.width;
-      const H = canvas.height;
+    const syncSize = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = container.getBoundingClientRect();
+      const W = Math.floor(rect.width);
+      const H = Math.floor(rect.height);
+      if (W === 0 || H === 0) return;
+      if (W !== sizeRef.current.W || H !== sizeRef.current.H) {
+        canvas.width = W * dpr;
+        canvas.height = H * dpr;
+        canvas.style.width = W + 'px';
+        canvas.style.height = H + 'px';
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        sizeRef.current = { W, H };
+      }
+    };
 
-      // Get audio energy
+    const ro = new ResizeObserver(syncSize);
+    ro.observe(container);
+    syncSize();
+
+    const draw = () => {
+      const { W, H } = sizeRef.current;
+      if (W === 0 || H === 0) { rafRef.current = requestAnimationFrame(draw); return; }
+
       let energy = 0;
       let bassLevel = 0;
       if (analyserNode && dataArray) {
@@ -79,8 +100,7 @@ export default function NeonTunnel({ analyserNode, status }) {
         ]);
       }
 
-      // Clear with fade
-      ctx.fillStyle = `rgba(0,0,0,0.3)`;
+      ctx.fillStyle = 'rgba(0,0,0,0.3)';
       ctx.fillRect(0, 0, W, H);
 
       const cx = W / 2;
@@ -93,7 +113,6 @@ export default function NeonTunnel({ analyserNode, status }) {
 
       ctx.lineWidth = 1.2;
 
-      // Draw rings
       for (let i = 0; i < rings; i++) {
         const t = (i / rings + time * 0.03 * (1 + bassLevel)) % 1;
         const z = t * depth;
@@ -120,7 +139,6 @@ export default function NeonTunnel({ analyserNode, status }) {
         ctx.stroke();
       }
 
-      // Draw spokes
       for (let i = 0; i < spokes; i++) {
         const angle = (i / spokes) * Math.PI * 2 + time * 0.05;
         ctx.beginPath();
@@ -141,7 +159,6 @@ export default function NeonTunnel({ analyserNode, status }) {
         ctx.stroke();
       }
 
-      // Center glow
       const glowR = 8 + energy * 20;
       const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, glowR);
       grad.addColorStop(0, accent + '40');
@@ -154,17 +171,15 @@ export default function NeonTunnel({ analyserNode, status }) {
     };
 
     rafRef.current = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(rafRef.current);
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      ro.disconnect();
+    };
   }, [analyserNode, status]);
 
   return (
-    <div className="visualizer-display" style={{ padding: 0 }}>
-      <canvas
-        ref={canvasRef}
-        width={400}
-        height={120}
-        style={{ width: '100%', height: '100%', background: '#000' }}
-      />
+    <div className="visualizer-display" style={{ padding: 0 }} ref={containerRef}>
+      <canvas ref={canvasRef} style={{ width: '100%', height: '100%', background: '#000' }} />
     </div>
   );
 }

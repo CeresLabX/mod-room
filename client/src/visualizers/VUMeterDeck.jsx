@@ -1,5 +1,5 @@
 // VU Meter Deck — Left/right retro stereo VU meters
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 
 function getCSSColor(varName, fallback) {
   if (typeof document === 'undefined') return fallback;
@@ -7,14 +7,17 @@ function getCSSColor(varName, fallback) {
 }
 
 export default function VUMeterDeck({ analyserNode, status }) {
+  const containerRef = useRef(null);
   const canvasRef = useRef(null);
   const rafRef = useRef(null);
   const levelsRef = useRef({ left: 0, right: 0, leftPeak: 0, rightPeak: 0 });
+  const sizeRef = useRef({ W: 0, H: 0 });
   const fakeTimeRef = useRef(0);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
     const ctx = canvas.getContext('2d');
 
     const primary = getCSSColor('--primary', '#00FF41');
@@ -29,11 +32,30 @@ export default function VUMeterDeck({ analyserNode, status }) {
       dataArray = new Uint8Array(bufferLength);
     }
 
-    const draw = () => {
-      const W = canvas.width;
-      const H = canvas.height;
+    const syncSize = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = container.getBoundingClientRect();
+      const W = Math.floor(rect.width);
+      const H = Math.floor(rect.height);
+      if (W === 0 || H === 0) return;
+      if (W !== sizeRef.current.W || H !== sizeRef.current.H) {
+        canvas.width = W * dpr;
+        canvas.height = H * dpr;
+        canvas.style.width = W + 'px';
+        canvas.style.height = H + 'px';
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        sizeRef.current = { W, H };
+      }
+    };
 
-      // Get left/right levels
+    const ro = new ResizeObserver(syncSize);
+    ro.observe(container);
+    syncSize();
+
+    const draw = () => {
+      const { W, H } = sizeRef.current;
+      if (W === 0 || H === 0) { rafRef.current = requestAnimationFrame(draw); return; }
+
       let left = 0, right = 0;
       if (analyserNode && dataArray) {
         analyserNode.getByteFrequencyData(dataArray);
@@ -51,7 +73,6 @@ export default function VUMeterDeck({ analyserNode, status }) {
         right = Math.max(0, Math.min(1, right));
       }
 
-      // Smooth levels
       levelsRef.current.left = levelsRef.current.left * 0.7 + left * 0.3;
       levelsRef.current.right = levelsRef.current.right * 0.7 + right * 0.3;
       if (left > levelsRef.current.leftPeak) levelsRef.current.leftPeak = left;
@@ -64,7 +85,6 @@ export default function VUMeterDeck({ analyserNode, status }) {
       const lp = levelsRef.current.leftPeak;
       const rp = levelsRef.current.rightPeak;
 
-      // Clear
       ctx.fillStyle = '#0a0a0a';
       ctx.fillRect(0, 0, W, H);
 
@@ -88,26 +108,20 @@ export default function VUMeterDeck({ analyserNode, status }) {
 
       // Scale labels
       ctx.fillStyle = dim;
-      ctx.font = '8px monospace';
+      ctx.font = `${Math.max(8, Math.floor(H * 0.09))}px monospace`;
       ctx.textAlign = 'center';
       const labels = ['0', '-2', '-4', '-6', '-8', '-10', '-14', '-20', '-∞'];
       for (let i = 0; i < labels.length; i++) {
         ctx.fillText(labels[i], (i / (labels.length - 1)) * W, H - 2);
       }
 
-      const meterH = H - 18;
+      const meterH = H - Math.max(18, H * 0.15);
       const barW = (W / 2) - 16;
 
       // Left meter
-      const lGrad = ctx.createLinearGradient(0, 0, 0, meterH);
-      lGrad.addColorStop(0, highlight);
-      lGrad.addColorStop(0.6, accent);
-      lGrad.addColorStop(1, primary);
-
       ctx.fillStyle = '#111';
       ctx.fillRect(4, 4, barW, meterH);
 
-      // Left level
       const lH = l * meterH;
       const lGrad2 = ctx.createLinearGradient(0, meterH - lH, 0, meterH);
       lGrad2.addColorStop(0, accent);
@@ -118,7 +132,6 @@ export default function VUMeterDeck({ analyserNode, status }) {
       ctx.fillRect(4, meterH - lH + 4, barW, lH);
       ctx.shadowBlur = 0;
 
-      // Left peak
       const lpH = (1 - lp) * meterH;
       ctx.fillStyle = lp > 0.85 ? highlight : primary;
       ctx.fillRect(4, lpH + 4, barW, 2);
@@ -137,19 +150,17 @@ export default function VUMeterDeck({ analyserNode, status }) {
       ctx.fillRect(W / 2 + 4, meterH - rH + 4, barW, rH);
       ctx.shadowBlur = 0;
 
-      // Right peak
       const rpH = (1 - rp) * meterH;
       ctx.fillStyle = rp > 0.85 ? highlight : primary;
       ctx.fillRect(W / 2 + 4, rpH + 4, barW, 2);
 
       // Labels
       ctx.fillStyle = primary;
-      ctx.font = 'bold 8px monospace';
+      ctx.font = `bold ${Math.max(8, Math.floor(H * 0.1))}px monospace`;
       ctx.textAlign = 'center';
-      ctx.fillText('◄ L', barW / 2 + 4, 12);
-      ctx.fillText('R ►', W / 2 + barW / 2 + 4, 12);
+      ctx.fillText('◄ L', barW / 2 + 4, 14);
+      ctx.fillText('R ►', W / 2 + barW / 2 + 4, 14);
 
-      // Border
       ctx.strokeStyle = dim + '60';
       ctx.lineWidth = 1;
       ctx.strokeRect(0.5, 0.5, W - 1, H - 1);
@@ -158,17 +169,15 @@ export default function VUMeterDeck({ analyserNode, status }) {
     };
 
     rafRef.current = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(rafRef.current);
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      ro.disconnect();
+    };
   }, [analyserNode, status]);
 
   return (
-    <div className="visualizer-display" style={{ padding: 0 }}>
-      <canvas
-        ref={canvasRef}
-        width={400}
-        height={90}
-        style={{ width: '100%', height: '100%', background: '#0a0a0a' }}
-      />
+    <div className="visualizer-display" style={{ padding: 0 }} ref={containerRef}>
+      <canvas ref={canvasRef} style={{ width: '100%', height: '100%', background: '#0a0a0a' }} />
     </div>
   );
 }

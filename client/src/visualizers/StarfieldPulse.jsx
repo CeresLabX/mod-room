@@ -6,32 +6,31 @@ function getCSSColor(varName, fallback) {
   return getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || fallback;
 }
 
-// Generate initial star positions
 function initStars(count, W, H) {
   return Array.from({ length: count }, () => ({
     x: Math.random() * W,
     y: Math.random() * H,
-    z: Math.random() * 3 + 0.5, // depth/speed multiplier
+    z: Math.random() * 3 + 0.5,
     size: Math.random() * 2 + 1,
   }));
 }
 
 export default function StarfieldPulse({ analyserNode, status }) {
+  const containerRef = useRef(null);
   const canvasRef = useRef(null);
   const rafRef = useRef(null);
   const starsRef = useRef([]);
+  const sizeRef = useRef({ W: 0, H: 0 });
   const [bars, setBars] = useState([0, 0, 0, 0, 0, 0, 0, 0]);
   const barsRef = useRef([0, 0, 0, 0, 0, 0, 0, 0]);
   const fakeTimeRef = useRef(0);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
     const ctx = canvas.getContext('2d');
-    let W = canvas.width;
-    let H = canvas.height;
 
-    // Fake frequency data when no analyser
     const fakeBars = () => {
       fakeTimeRef.current += 0.05;
       return [
@@ -46,8 +45,6 @@ export default function StarfieldPulse({ analyserNode, status }) {
       ];
     };
 
-    starsRef.current = initStars(80, W, H);
-
     const primary = getCSSColor('--primary', '#00FF41');
     const accent = getCSSColor('--accent', '#00FFFF');
     const highlight = getCSSColor('--highlight', '#FF00FF');
@@ -59,15 +56,31 @@ export default function StarfieldPulse({ analyserNode, status }) {
       dataArray = new Uint8Array(bufferLength);
     }
 
-    const draw = () => {
-      // Resize stars if canvas size changed
-      if (canvas.width !== W || canvas.height !== H) {
-        W = canvas.width;
-        H = canvas.height;
+    const syncSize = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = container.getBoundingClientRect();
+      const W = Math.floor(rect.width);
+      const H = Math.floor(rect.height);
+      if (W === 0 || H === 0) return;
+      if (W !== sizeRef.current.W || H !== sizeRef.current.H) {
+        canvas.width = W * dpr;
+        canvas.height = H * dpr;
+        canvas.style.width = W + 'px';
+        canvas.style.height = H + 'px';
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        sizeRef.current = { W, H };
         starsRef.current = initStars(80, W, H);
       }
+    };
 
-      // Get bass level (first 4 bands averaged)
+    const ro = new ResizeObserver(syncSize);
+    ro.observe(container);
+    syncSize();
+
+    const draw = () => {
+      const { W, H } = sizeRef.current;
+      if (W === 0 || H === 0) { rafRef.current = requestAnimationFrame(draw); return; }
+
       let bassLevel = 0;
       if (analyserNode && dataArray) {
         analyserNode.getByteFrequencyData(dataArray);
@@ -91,11 +104,9 @@ export default function StarfieldPulse({ analyserNode, status }) {
         barsRef.current = fb;
       }
 
-      // Fade trail
       ctx.fillStyle = 'rgba(0,0,0,0.25)';
       ctx.fillRect(0, 0, W, H);
 
-      // Draw CRT scanline effect occasionally
       if (Math.random() < 0.02) {
         ctx.fillStyle = 'rgba(0,0,0,0.15)';
         ctx.fillRect(0, Math.random() * H, W, 2);
@@ -105,7 +116,6 @@ export default function StarfieldPulse({ analyserNode, status }) {
       const bassStretch = 1 + bassLevel * 4;
 
       for (const star of stars) {
-        // Move star toward viewer (increase z)
         star.z -= 0.02 * star.z;
         if (star.z <= 0) {
           star.x = Math.random() * W;
@@ -113,18 +123,14 @@ export default function StarfieldPulse({ analyserNode, status }) {
           star.z = 3.5;
         }
 
-        // Project star position
         const scale = 1 / star.z;
         const sx = (star.x - W / 2) * scale * bassStretch + W / 2;
         const sy = (star.y - H / 2) * scale * bassStretch + H / 2;
-
-        // Stretch star based on bass (speed lines)
         const stretch = bassLevel * 10 * star.z;
         const color = star.z > 2 ? accent : primary;
         const alpha = Math.min(1, (3 - star.z) / 2);
 
         if (sx >= 0 && sx <= W && sy >= 0 && sy <= H) {
-          // Glow
           ctx.beginPath();
           ctx.arc(sx, sy, star.size * scale * (1 + bassLevel), 0, Math.PI * 2);
           ctx.fillStyle = color + Math.floor(alpha * 200).toString(16).padStart(2, '0');
@@ -132,7 +138,6 @@ export default function StarfieldPulse({ analyserNode, status }) {
           ctx.shadowBlur = 8 * bassLevel;
           ctx.fill();
 
-          // Stretch line for speed effect
           if (stretch > 1) {
             ctx.beginPath();
             ctx.moveTo(sx, sy);
@@ -144,7 +149,6 @@ export default function StarfieldPulse({ analyserNode, status }) {
         }
       }
 
-      // Border glow based on bass
       if (bassLevel > 0.3) {
         ctx.strokeStyle = accent + '30';
         ctx.lineWidth = 2;
@@ -155,17 +159,15 @@ export default function StarfieldPulse({ analyserNode, status }) {
     };
 
     rafRef.current = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(rafRef.current);
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      ro.disconnect();
+    };
   }, [analyserNode, status]);
 
   return (
-    <div className="visualizer-display" style={{ padding: 0, alignItems: 'stretch' }}>
-      <canvas
-        ref={canvasRef}
-        width={400}
-        height={120}
-        style={{ width: '100%', height: '100%', background: '#000' }}
-      />
+    <div className="visualizer-display" style={{ padding: 0, alignItems: 'stretch' }} ref={containerRef}>
+      <canvas ref={canvasRef} style={{ width: '100%', height: '100%', background: '#000' }} />
     </div>
   );
 }
