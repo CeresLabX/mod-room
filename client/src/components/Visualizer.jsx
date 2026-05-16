@@ -153,14 +153,15 @@ function Oscilloscope({ analyserNode }) {
 }
 
 function TrackerMeters({ analyserNode }) {
-  const [levels, setLevels] = useState(Array(8).fill(0));
+  const CHANNELS = 16;
+  const [levels, setLevels] = useState(Array(CHANNELS).fill(0));
   const rafRef = useRef(null);
   const intervalRef = useRef(null);
 
   useEffect(() => {
     if (!analyserNode) {
       const interval = setInterval(() => {
-        setLevels(prev => prev.map(() => Math.random() * 80 + 5));
+        setLevels(prev => prev.map((_, i) => 20 + Math.random() * 75 * (0.7 + (i % 4) * 0.08)));
       }, 100);
       return () => clearInterval(interval);
     }
@@ -170,12 +171,15 @@ function TrackerMeters({ analyserNode }) {
 
     const draw = () => {
       analyserNode.getByteFrequencyData(dataArray);
-      const step = Math.floor(bufferLength / 8);
-      const newLevels = Array(8).fill(0).map((_, i) => {
-        const val = dataArray[i * step] || 0;
-        return (val / 255) * 100;
+      const newLevels = Array(CHANNELS).fill(0).map((_, i) => {
+        const start = Math.floor((i / CHANNELS) * bufferLength);
+        const end = Math.max(start + 1, Math.floor(((i + 1) / CHANNELS) * bufferLength));
+        let sum = 0;
+        for (let j = start; j < end; j++) sum += dataArray[j] || 0;
+        const avg = sum / ((end - start) * 255);
+        return Math.min(100, Math.max(3, avg * 135));
       });
-      setLevels(newLevels);
+      setLevels(prev => prev.map((v, i) => v * 0.55 + newLevels[i] * 0.45));
       rafRef.current = requestAnimationFrame(draw);
     };
 
@@ -184,11 +188,11 @@ function TrackerMeters({ analyserNode }) {
   }, [analyserNode]);
 
   return (
-    <div className="visualizer-display" style={{ flexDirection: 'column', justifyContent: 'center' }}>
+    <div className="visualizer-display tracker-visualizer-display" style={{ flexDirection: 'column', alignItems: 'stretch', justifyContent: 'stretch' }}>
       <div className="tracker-meters">
         {levels.map((level, i) => (
           <div key={i} className="tracker-channel">
-            <span className="tracker-ch-num">CH{i + 1}</span>
+            <span className="tracker-ch-num">CH{String(i + 1).padStart(2, '0')}</span>
             <div className="tracker-level">
               <div className="tracker-level-fill" style={{ width: `${level}%` }} />
             </div>

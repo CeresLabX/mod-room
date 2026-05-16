@@ -1,183 +1,55 @@
-// VU Meter Deck — Left/right retro stereo VU meters
+// VU Meter Deck — full-scale stereo LED meter deck
 import React, { useEffect, useRef } from 'react';
+function css(v, f) { return getComputedStyle(document.documentElement).getPropertyValue(v).trim() || f; }
+function avg(data, a, b) { let s = 0, n = 0; for (let i = a; i < b; i++) { s += data[Math.min(data.length - 1, i)] || 0; n++; } return n ? s / (n * 255) : 0; }
 
-function getCSSColor(varName, fallback) {
-  if (typeof document === 'undefined') return fallback;
-  return getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || fallback;
-}
-
-export default function VUMeterDeck({ analyserNode, status }) {
-  const containerRef = useRef(null);
-  const canvasRef = useRef(null);
-  const rafRef = useRef(null);
-  const levelsRef = useRef({ left: 0, right: 0, leftPeak: 0, rightPeak: 0 });
+export default function VUMeterDeck({ analyserNode }) {
+  const containerRef = useRef(null), canvasRef = useRef(null), rafRef = useRef(null);
   const sizeRef = useRef({ W: 0, H: 0 });
-  const fakeTimeRef = useRef(0);
+  const levels = useRef({ l: 0, r: 0, lp: 0, rp: 0 });
+  const timeRef = useRef(0);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    const container = containerRef.current;
+    const canvas = canvasRef.current, container = containerRef.current;
     if (!canvas || !container) return;
     const ctx = canvas.getContext('2d');
-
-    const primary = getCSSColor('--primary', '#00FF41');
-    const accent = getCSSColor('--accent', '#00FFFF');
-    const highlight = getCSSColor('--highlight', '#FF00FF');
-    const dim = getCSSColor('--dim', '#008844');
-
-    let bufferLength = 0;
-    let dataArray = null;
-    if (analyserNode) {
-      bufferLength = analyserNode.frequencyBinCount;
-      dataArray = new Uint8Array(bufferLength);
-    }
-
-    const syncSize = () => {
-      const dpr = window.devicePixelRatio || 1;
-      const rect = container.getBoundingClientRect();
-      const W = Math.floor(rect.width);
-      const H = Math.floor(rect.height);
-      if (W === 0 || H === 0) return;
-      if (W !== sizeRef.current.W || H !== sizeRef.current.H) {
-        canvas.width = W * dpr;
-        canvas.height = H * dpr;
-        canvas.style.width = W + 'px';
-        canvas.style.height = H + 'px';
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        sizeRef.current = { W, H };
+    const primary = css('--primary', '#00FF41'), accent = css('--accent', '#00FFFF'), hi = css('--highlight', '#FF00FF'), dim = css('--dim', '#008844');
+    const data = analyserNode ? new Uint8Array(analyserNode.frequencyBinCount) : null;
+    const syncSize = () => { const dpr = window.devicePixelRatio || 1; const r = container.getBoundingClientRect(); const W = Math.floor(r.width), H = Math.floor(r.height); if (!W || !H) return; if (W !== sizeRef.current.W || H !== sizeRef.current.H) { canvas.width = W*dpr; canvas.height = H*dpr; canvas.style.width=W+'px'; canvas.style.height=H+'px'; ctx.setTransform(dpr,0,0,dpr,0,0); sizeRef.current={W,H}; }};
+    const ro = new ResizeObserver(syncSize); ro.observe(container); syncSize();
+    const drawMeter = (label, value, peak, x, y, w, h) => {
+      ctx.fillStyle = '#070707'; ctx.fillRect(x, y, w, h);
+      ctx.strokeStyle = dim; ctx.lineWidth = 1; ctx.strokeRect(x+.5, y+.5, w-1, h-1);
+      const segs = Math.max(28, Math.floor(w / 10)); const gap = 2; const sw = (w - gap * (segs + 1)) / segs;
+      for (let i = 0; i < segs; i++) {
+        const p = (i + 1) / segs; const active = p <= value;
+        const col = p > .86 ? hi : p > .66 ? accent : primary;
+        ctx.fillStyle = active ? col : dim + '22';
+        ctx.shadowColor = col; ctx.shadowBlur = active ? 5 + value * 8 : 0;
+        ctx.fillRect(x + gap + i * (sw + gap), y + h * .22, sw, h * .50);
       }
+      ctx.shadowBlur = 0;
+      const px = x + Math.min(1, peak) * w;
+      ctx.fillStyle = peak > .86 ? hi : accent; ctx.fillRect(px - 2, y + h * .16, 4, h * .62);
+      ctx.fillStyle = primary; ctx.font = `bold ${Math.max(10, Math.floor(h*.18))}px monospace`; ctx.textAlign='left'; ctx.fillText(label, x + 8, y + h - 8);
+      ctx.textAlign='right'; ctx.fillText(`${Math.round(value*100)}%`, x + w - 8, y + h - 8);
     };
-
-    const ro = new ResizeObserver(syncSize);
-    ro.observe(container);
-    syncSize();
-
     const draw = () => {
-      const { W, H } = sizeRef.current;
-      if (W === 0 || H === 0) { rafRef.current = requestAnimationFrame(draw); return; }
-
-      let left = 0, right = 0;
-      if (analyserNode && dataArray) {
-        analyserNode.getByteFrequencyData(dataArray);
-        const half = Math.floor(bufferLength / 2);
-        let leftSum = 0, rightSum = 0;
-        for (let i = 0; i < half; i++) leftSum += dataArray[i];
-        for (let i = half; i < bufferLength; i++) rightSum += dataArray[i];
-        left = leftSum / (half * 255);
-        right = rightSum / (half * 255);
-      } else {
-        fakeTimeRef.current += 0.04;
-        left = 0.4 + 0.35 * Math.sin(fakeTimeRef.current * 1.1) + 0.1 * Math.sin(fakeTimeRef.current * 3.1);
-        right = 0.45 + 0.3 * Math.sin(fakeTimeRef.current * 0.9 + 1.3) + 0.1 * Math.sin(fakeTimeRef.current * 2.7);
-        left = Math.max(0, Math.min(1, left));
-        right = Math.max(0, Math.min(1, right));
-      }
-
-      levelsRef.current.left = levelsRef.current.left * 0.7 + left * 0.3;
-      levelsRef.current.right = levelsRef.current.right * 0.7 + right * 0.3;
-      if (left > levelsRef.current.leftPeak) levelsRef.current.leftPeak = left;
-      if (right > levelsRef.current.rightPeak) levelsRef.current.rightPeak = right;
-      levelsRef.current.leftPeak *= 0.985;
-      levelsRef.current.rightPeak *= 0.985;
-
-      const l = levelsRef.current.left;
-      const r = levelsRef.current.right;
-      const lp = levelsRef.current.leftPeak;
-      const rp = levelsRef.current.rightPeak;
-
-      ctx.fillStyle = '#0a0a0a';
-      ctx.fillRect(0, 0, W, H);
-
-      // Grid
-      ctx.strokeStyle = dim + '40';
-      ctx.lineWidth = 0.5;
-      for (let i = 1; i < 10; i++) {
-        const x = (i / 10) * W;
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, H);
-        ctx.stroke();
-      }
-      for (let i = 1; i < 6; i++) {
-        const y = (i / 6) * H;
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(W, y);
-        ctx.stroke();
-      }
-
-      // Scale labels
-      ctx.fillStyle = dim;
-      ctx.font = `${Math.max(8, Math.floor(H * 0.09))}px monospace`;
-      ctx.textAlign = 'center';
-      const labels = ['0', '-2', '-4', '-6', '-8', '-10', '-14', '-20', '-∞'];
-      for (let i = 0; i < labels.length; i++) {
-        ctx.fillText(labels[i], (i / (labels.length - 1)) * W, H - 2);
-      }
-
-      const meterH = H - Math.max(18, H * 0.15);
-      const barW = (W / 2) - 16;
-
-      // Left meter
-      ctx.fillStyle = '#111';
-      ctx.fillRect(4, 4, barW, meterH);
-
-      const lH = l * meterH;
-      const lGrad2 = ctx.createLinearGradient(0, meterH - lH, 0, meterH);
-      lGrad2.addColorStop(0, accent);
-      lGrad2.addColorStop(1, primary);
-      ctx.fillStyle = lGrad2;
-      ctx.shadowColor = l > 0.8 ? highlight : accent;
-      ctx.shadowBlur = l > 0.7 ? 8 : 4;
-      ctx.fillRect(4, meterH - lH + 4, barW, lH);
-      ctx.shadowBlur = 0;
-
-      const lpH = (1 - lp) * meterH;
-      ctx.fillStyle = lp > 0.85 ? highlight : primary;
-      ctx.fillRect(4, lpH + 4, barW, 2);
-
-      // Right meter
-      ctx.fillStyle = '#111';
-      ctx.fillRect(W / 2 + 4, 4, barW, meterH);
-
-      const rH = r * meterH;
-      const rGrad = ctx.createLinearGradient(0, meterH - rH, 0, meterH);
-      rGrad.addColorStop(0, accent);
-      rGrad.addColorStop(1, primary);
-      ctx.fillStyle = rGrad;
-      ctx.shadowColor = r > 0.8 ? highlight : accent;
-      ctx.shadowBlur = r > 0.7 ? 8 : 4;
-      ctx.fillRect(W / 2 + 4, meterH - rH + 4, barW, rH);
-      ctx.shadowBlur = 0;
-
-      const rpH = (1 - rp) * meterH;
-      ctx.fillStyle = rp > 0.85 ? highlight : primary;
-      ctx.fillRect(W / 2 + 4, rpH + 4, barW, 2);
-
-      // Labels
-      ctx.fillStyle = primary;
-      ctx.font = `bold ${Math.max(8, Math.floor(H * 0.1))}px monospace`;
-      ctx.textAlign = 'center';
-      ctx.fillText('◄ L', barW / 2 + 4, 14);
-      ctx.fillText('R ►', W / 2 + barW / 2 + 4, 14);
-
-      ctx.strokeStyle = dim + '60';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(0.5, 0.5, W - 1, H - 1);
-
-      rafRef.current = requestAnimationFrame(draw);
+      const { W, H } = sizeRef.current; if (!W || !H) { rafRef.current=requestAnimationFrame(draw); return; }
+      timeRef.current += 0.04;
+      let l, r;
+      if (analyserNode && data) { analyserNode.getByteFrequencyData(data); l = avg(data, 0, data.length * .45); r = avg(data, data.length * .15, data.length); }
+      else { l = .45 + .4*Math.abs(Math.sin(timeRef.current*1.7)); r = .42 + .42*Math.abs(Math.sin(timeRef.current*1.3+1.2)); }
+      l = Math.min(1, l * 1.75); r = Math.min(1, r * 1.75);
+      const s = levels.current; s.l = s.l*.62 + l*.38; s.r = s.r*.62 + r*.38; s.lp = Math.max(s.lp*.982, s.l); s.rp = Math.max(s.rp*.982, s.r);
+      ctx.fillStyle = '#020402'; ctx.fillRect(0,0,W,H);
+      ctx.strokeStyle = dim + '35'; ctx.lineWidth = .5; for(let i=1;i<10;i++){ const x=i*W/10; ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+      const pad = Math.max(10, W*.018); const mh = (H - pad*3) / 2;
+      drawMeter('LEFT  -20  -10  -6  -3  0 +3', s.l, s.lp, pad, pad, W-pad*2, mh);
+      drawMeter('RIGHT -20  -10  -6  -3  0 +3', s.r, s.rp, pad, pad*2+mh, W-pad*2, mh);
+      rafRef.current=requestAnimationFrame(draw);
     };
-
-    rafRef.current = requestAnimationFrame(draw);
-    return () => {
-      cancelAnimationFrame(rafRef.current);
-      ro.disconnect();
-    };
-  }, [analyserNode, status]);
-
-  return (
-    <div className="visualizer-display" style={{ padding: 0 }} ref={containerRef}>
-      <canvas ref={canvasRef} style={{ width: '100%', height: '100%', background: '#0a0a0a' }} />
-    </div>
-  );
+    rafRef.current=requestAnimationFrame(draw); return()=>{cancelAnimationFrame(rafRef.current); ro.disconnect();};
+  }, [analyserNode]);
+  return <div className="visualizer-display" style={{padding:0}} ref={containerRef}><canvas ref={canvasRef} style={{width:'100%',height:'100%',background:'#000'}} /></div>;
 }

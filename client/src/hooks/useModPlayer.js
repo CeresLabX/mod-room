@@ -104,7 +104,8 @@ export function useModPlayer({ item, onEnded, onError }) {
     gainRef.current = gain;
 
     const analyser = ctx.createAnalyser();
-    analyser.fftSize = 128;
+    analyser.fftSize = 512;
+    analyser.smoothingTimeConstant = 0.55;
     analyserRef.current = analyser;
     setAnalyserNode(analyser);
 

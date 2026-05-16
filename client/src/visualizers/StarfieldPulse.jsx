@@ -1,173 +1,113 @@
-// Starfield Pulse — DOS demo-scene starfield that pulses with bass
-import React, { useEffect, useRef, useState } from 'react';
+// Starfield Pulse — audio-reactive warp-speed demo-scene starfield
+import React, { useEffect, useRef } from 'react';
 
-function getCSSColor(varName, fallback) {
-  if (typeof document === 'undefined') return fallback;
-  return getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || fallback;
-}
-
+function css(v, f) { return getComputedStyle(document.documentElement).getPropertyValue(v).trim() || f; }
+function avg(data, a, b) { let s = 0, n = 0; for (let i = a; i < b; i++) { s += data[Math.min(data.length - 1, i)] || 0; n++; } return n ? s / (n * 255) : 0; }
 function initStars(count, W, H) {
   return Array.from({ length: count }, () => ({
-    x: Math.random() * W,
-    y: Math.random() * H,
-    z: Math.random() * 3 + 0.5,
-    size: Math.random() * 2 + 1,
+    x: (Math.random() - 0.5) * W * 2,
+    y: (Math.random() - 0.5) * H * 2,
+    z: Math.random() * W,
+    pz: 0,
+    size: Math.random() * 1.6 + 0.6,
   }));
 }
 
-export default function StarfieldPulse({ analyserNode, status }) {
+export default function StarfieldPulse({ analyserNode }) {
   const containerRef = useRef(null);
   const canvasRef = useRef(null);
   const rafRef = useRef(null);
   const starsRef = useRef([]);
   const sizeRef = useRef({ W: 0, H: 0 });
-  const [bars, setBars] = useState([0, 0, 0, 0, 0, 0, 0, 0]);
-  const barsRef = useRef([0, 0, 0, 0, 0, 0, 0, 0]);
-  const fakeTimeRef = useRef(0);
+  const energyRef = useRef({ bass: 0, mid: 0, high: 0, total: 0 });
+  const timeRef = useRef(0);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     const container = containerRef.current;
     if (!canvas || !container) return;
     const ctx = canvas.getContext('2d');
-
-    const fakeBars = () => {
-      fakeTimeRef.current += 0.05;
-      return [
-        0.3 + 0.4 * Math.sin(fakeTimeRef.current * 1.1),
-        0.5 + 0.3 * Math.sin(fakeTimeRef.current * 0.9 + 1),
-        0.4 + 0.3 * Math.sin(fakeTimeRef.current * 1.3 + 2),
-        0.6 + 0.3 * Math.sin(fakeTimeRef.current * 0.7 + 0.5),
-        0.3 + 0.4 * Math.sin(fakeTimeRef.current * 1.5 + 1.5),
-        0.5 + 0.3 * Math.sin(fakeTimeRef.current * 0.8 + 3),
-        0.4 + 0.3 * Math.sin(fakeTimeRef.current * 1.2 + 0.8),
-        0.6 + 0.3 * Math.sin(fakeTimeRef.current * 1.0 + 2.5),
-      ];
-    };
-
-    const primary = getCSSColor('--primary', '#00FF41');
-    const accent = getCSSColor('--accent', '#00FFFF');
-    const highlight = getCSSColor('--highlight', '#FF00FF');
-
-    let bufferLength = 0;
-    let dataArray = null;
-    if (analyserNode) {
-      bufferLength = analyserNode.frequencyBinCount;
-      dataArray = new Uint8Array(bufferLength);
-    }
+    const primary = css('--primary', '#00FF41');
+    const accent = css('--accent', '#00FFFF');
+    const highlight = css('--highlight', '#FF00FF');
+    const data = analyserNode ? new Uint8Array(analyserNode.frequencyBinCount) : null;
 
     const syncSize = () => {
       const dpr = window.devicePixelRatio || 1;
       const rect = container.getBoundingClientRect();
-      const W = Math.floor(rect.width);
-      const H = Math.floor(rect.height);
-      if (W === 0 || H === 0) return;
+      const W = Math.floor(rect.width), H = Math.floor(rect.height);
+      if (!W || !H) return;
       if (W !== sizeRef.current.W || H !== sizeRef.current.H) {
-        canvas.width = W * dpr;
-        canvas.height = H * dpr;
-        canvas.style.width = W + 'px';
-        canvas.style.height = H + 'px';
+        canvas.width = W * dpr; canvas.height = H * dpr;
+        canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         sizeRef.current = { W, H };
-        starsRef.current = initStars(80, W, H);
+        starsRef.current = initStars(Math.max(220, Math.floor(W * H / 1800)), W, H);
       }
     };
-
-    const ro = new ResizeObserver(syncSize);
-    ro.observe(container);
-    syncSize();
+    const ro = new ResizeObserver(syncSize); ro.observe(container); syncSize();
 
     const draw = () => {
       const { W, H } = sizeRef.current;
-      if (W === 0 || H === 0) { rafRef.current = requestAnimationFrame(draw); return; }
-
-      let bassLevel = 0;
-      if (analyserNode && dataArray) {
-        analyserNode.getByteFrequencyData(dataArray);
-        const bass = Array.from({ length: Math.min(4, bufferLength) }, (_, i) => dataArray[i] / 255);
-        bassLevel = bass.reduce((a, b) => a + b, 0) / bass.length;
-        const mid = Array.from({ length: Math.min(4, bufferLength) }, (_, i) => dataArray[Math.min(bufferLength - 1, i + 4)] / 255);
-        const midLevel = mid.reduce((a, b) => a + b, 0) / mid.length;
-        setBars(prev => {
-          const next = [...prev];
-          for (let i = 0; i < 8; i++) {
-            const target = i < 4 ? bassLevel : midLevel;
-            next[i] = next[i] * 0.7 + target * 0.3;
-          }
-          return next;
-        });
-        barsRef.current = Array.from({ length: 8 }, (_, i) => i < 4 ? bassLevel : midLevel);
+      if (!W || !H) { rafRef.current = requestAnimationFrame(draw); return; }
+      timeRef.current += 1;
+      let bass, mid, high, total;
+      if (analyserNode && data) {
+        analyserNode.getByteFrequencyData(data);
+        bass = avg(data, 0, Math.max(3, data.length * 0.10));
+        mid = avg(data, data.length * 0.12, data.length * 0.45);
+        high = avg(data, data.length * 0.45, data.length);
+        total = avg(data, 0, data.length);
       } else {
-        const fb = fakeBars();
-        bassLevel = (fb[0] + fb[1] + fb[2] + fb[3]) / 4;
-        setBars(fb);
-        barsRef.current = fb;
+        const t = timeRef.current * 0.035;
+        bass = 0.45 + 0.35 * Math.abs(Math.sin(t * 1.7));
+        mid = 0.35 + 0.35 * Math.abs(Math.sin(t * 1.1 + 1));
+        high = 0.25 + 0.25 * Math.abs(Math.sin(t * 2.3));
+        total = (bass + mid + high) / 3;
       }
+      const e = energyRef.current;
+      e.bass = e.bass * 0.70 + bass * 0.30;
+      e.mid = e.mid * 0.75 + mid * 0.25;
+      e.high = e.high * 0.65 + high * 0.35;
+      e.total = e.total * 0.75 + total * 0.25;
 
-      ctx.fillStyle = 'rgba(0,0,0,0.25)';
+      ctx.fillStyle = `rgba(0,0,0,${0.28 - Math.min(0.12, e.total * 0.08)})`;
       ctx.fillRect(0, 0, W, H);
+      const cx = W / 2 + Math.sin(timeRef.current * 0.017) * W * 0.08 * e.mid;
+      const cy = H / 2 + Math.cos(timeRef.current * 0.013) * H * 0.08 * e.high;
+      const speed = 2.5 + e.bass * 42 + e.total * 16;
 
-      if (Math.random() < 0.02) {
-        ctx.fillStyle = 'rgba(0,0,0,0.15)';
-        ctx.fillRect(0, Math.random() * H, W, 2);
-      }
-
-      const stars = starsRef.current;
-      const bassStretch = 1 + bassLevel * 4;
-
-      for (const star of stars) {
-        star.z -= 0.02 * star.z;
-        if (star.z <= 0) {
-          star.x = Math.random() * W;
-          star.y = Math.random() * H;
-          star.z = 3.5;
+      for (const s of starsRef.current) {
+        s.pz = s.z;
+        s.z -= speed * (0.35 + s.size * 0.45);
+        if (s.z < 1) {
+          s.x = (Math.random() - 0.5) * W * 2;
+          s.y = (Math.random() - 0.5) * H * 2;
+          s.z = W;
+          s.pz = s.z;
         }
-
-        const scale = 1 / star.z;
-        const sx = (star.x - W / 2) * scale * bassStretch + W / 2;
-        const sy = (star.y - H / 2) * scale * bassStretch + H / 2;
-        const stretch = bassLevel * 10 * star.z;
-        const color = star.z > 2 ? accent : primary;
-        const alpha = Math.min(1, (3 - star.z) / 2);
-
-        if (sx >= 0 && sx <= W && sy >= 0 && sy <= H) {
-          ctx.beginPath();
-          ctx.arc(sx, sy, star.size * scale * (1 + bassLevel), 0, Math.PI * 2);
-          ctx.fillStyle = color + Math.floor(alpha * 200).toString(16).padStart(2, '0');
-          ctx.shadowColor = color;
-          ctx.shadowBlur = 8 * bassLevel;
-          ctx.fill();
-
-          if (stretch > 1) {
-            ctx.beginPath();
-            ctx.moveTo(sx, sy);
-            ctx.lineTo(sx - star.x * 0.02 * bassLevel, sy - star.y * 0.02 * bassLevel);
-            ctx.strokeStyle = color + '80';
-            ctx.lineWidth = Math.max(0.5, star.size * scale);
-            ctx.stroke();
-          }
-        }
+        const k = W / s.z;
+        const pk = W / s.pz;
+        const x = s.x * k + cx, y = s.y * k + cy;
+        const px = s.x * pk + cx, py = s.y * pk + cy;
+        if (x < -50 || x > W + 50 || y < -50 || y > H + 50) continue;
+        const color = s.size > 1.5 ? highlight : e.high > 0.35 ? accent : primary;
+        ctx.strokeStyle = color + Math.floor(Math.min(255, 90 + e.total * 165)).toString(16).padStart(2, '0');
+        ctx.lineWidth = Math.max(1, s.size * (0.8 + e.bass * 2.2));
+        ctx.shadowColor = color; ctx.shadowBlur = 4 + e.bass * 14;
+        ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(x, y); ctx.stroke();
       }
-
-      if (bassLevel > 0.3) {
-        ctx.strokeStyle = accent + '30';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(1, 1, W - 2, H - 2);
+      ctx.shadowBlur = 0;
+      if (e.bass > 0.28) {
+        ctx.strokeStyle = accent + Math.floor(e.bass * 150).toString(16).padStart(2, '0');
+        ctx.lineWidth = 1 + e.bass * 5;
+        ctx.strokeRect(2, 2, W - 4, H - 4);
       }
-
       rafRef.current = requestAnimationFrame(draw);
     };
-
     rafRef.current = requestAnimationFrame(draw);
-    return () => {
-      cancelAnimationFrame(rafRef.current);
-      ro.disconnect();
-    };
-  }, [analyserNode, status]);
+    return () => { cancelAnimationFrame(rafRef.current); ro.disconnect(); };
+  }, [analyserNode]);
 
-  return (
-    <div className="visualizer-display" style={{ padding: 0, alignItems: 'stretch' }} ref={containerRef}>
-      <canvas ref={canvasRef} style={{ width: '100%', height: '100%', background: '#000' }} />
-    </div>
-  );
+  return <div className="visualizer-display" style={{ padding: 0 }} ref={containerRef}><canvas ref={canvasRef} style={{ width: '100%', height: '100%', background: '#000' }} /></div>;
 }

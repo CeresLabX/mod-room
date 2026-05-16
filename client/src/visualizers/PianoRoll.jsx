@@ -9,8 +9,8 @@ function getCSSColor(varName, fallback) {
 const BASE_BLOCK_W = 20;
 const BASE_BLOCK_H = 6;
 const GAP = 2;
-const LANES = 12;
-const BASE_SPEED = 1.5;
+const LANES = 60;
+const BASE_SPEED = 2.2;
 
 export default function PianoRoll({ analyserNode, status }) {
   const containerRef = useRef(null);
@@ -45,9 +45,9 @@ export default function PianoRoll({ analyserNode, status }) {
       const availH = Math.floor(rect.height);
       if (availW === 0 || availH === 0) return;
 
-      const blockW = Math.max(10, Math.floor(availW / LANES) - GAP);
-      const blockH = Math.max(4, Math.floor(availH / 12));
-      const W = LANES * (blockW + GAP);
+      const blockW = Math.max(2, Math.floor((availW - GAP * (LANES - 1)) / LANES));
+      const blockH = Math.max(3, Math.floor(availH / 28));
+      const W = availW;
       const H = availH;
 
       if (W !== sizeRef.current.W || H !== sizeRef.current.H) {
@@ -102,8 +102,7 @@ export default function PianoRoll({ analyserNode, status }) {
         analyserNode.getByteFrequencyData(dataArray);
         let sum = 0;
         for (let i = 0; i < bufferLength; i++) sum += dataArray[i];
-        e = sum / (bufferLength * 255);
-        e = Math.max(0, Math.min(1, e * 1.5));
+        e = Math.max(0, Math.min(1, (sum / (bufferLength * 255)) * 1.8));
         setEnergy(e);
       } else {
         timeRef.current += 0.02;
@@ -111,15 +110,20 @@ export default function PianoRoll({ analyserNode, status }) {
         setEnergy(e);
       }
 
-      const speed = BASE_SPEED * (0.8 + e * 0.8);
+      const speed = BASE_SPEED * (0.9 + e * 1.4);
 
       spawnTimer++;
-      const spawnRate = Math.max(4, Math.floor(12 - e * 8));
-      if (spawnTimer >= spawnRate && e > 0.15) {
+      const spawnRate = Math.max(2, Math.floor(7 - e * 5));
+      if (spawnTimer >= spawnRate && e > 0.08) {
         spawnTimer = 0;
-        const count = e > 0.5 ? 2 : 1;
+        const count = Math.max(1, Math.min(8, Math.round(1 + e * 9)));
         for (let c = 0; c < count; c++) {
-          notesRef.current.push(new Note(Math.floor(Math.random() * LANES), blockW, blockH));
+          let lane = Math.floor(Math.random() * LANES);
+          if (analyserNode && dataArray) {
+            const probe = Math.floor(Math.random() * bufferLength);
+            lane = Math.min(LANES - 1, Math.floor((probe / Math.max(1, bufferLength - 1)) * LANES));
+          }
+          notesRef.current.push(new Note(lane, blockW, blockH));
         }
       }
 
@@ -134,12 +138,6 @@ export default function PianoRoll({ analyserNode, status }) {
         ctx.fillRect(note.x + 1, note.y, note.width, note.blockH - 1);
         ctx.shadowBlur = 0;
 
-        if (note.age < 10) {
-          ctx.fillStyle = '#000';
-          ctx.font = `${Math.max(5, Math.floor(note.blockH * 0.8))}px monospace`;
-          ctx.textAlign = 'center';
-          ctx.fillText(['C', 'D', 'E', 'F', 'G', 'A', 'B'][note.lane % 7] + Math.floor(note.lane / 7), note.x + note.width / 2 + 1, note.y + note.blockH - 1);
-        }
 
         if (note.y > 0) {
           ctx.fillStyle = note.color + '20';
@@ -180,8 +178,8 @@ export default function PianoRoll({ analyserNode, status }) {
   }, [analyserNode, status]);
 
   return (
-    <div className="visualizer-display" style={{ padding: 0, justifyContent: 'center' }} ref={containerRef}>
-      <canvas ref={canvasRef} style={{ background: '#050505' }} />
+    <div className="visualizer-display" style={{ padding: 0, justifyContent: 'stretch', alignItems: 'stretch' }} ref={containerRef}>
+      <canvas ref={canvasRef} style={{ width: '100%', height: '100%', background: '#050505' }} />
     </div>
   );
 }

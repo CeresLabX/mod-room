@@ -12,8 +12,10 @@ export default function PixelEqualizer({ analyserNode, status }) {
   const rafRef = useRef(null);
   const fakeTimeRef = useRef(0);
   const sizeRef = useRef({ W: 0, H: 0 });
-  const [bars, setBars] = useState(Array(16).fill(0));
-  const barsRef = useRef(Array(16).fill(0));
+  const COLS = 80;
+  const ROWS = 24;
+  const [bars, setBars] = useState(Array(COLS).fill(0));
+  const barsRef = useRef(Array(COLS).fill(0));
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -26,11 +28,7 @@ export default function PixelEqualizer({ analyserNode, status }) {
     const highlight = getCSSColor('--highlight', '#FF00FF');
     const dim = getCSSColor('--dim', '#004400');
 
-    const BASE_BLOCK_W = 20;
-    const BASE_BLOCK_H = 8;
-    const GAP = 2;
-    const COLS = 16;
-    const ROWS = 12;
+    const GAP = 1;
 
     let bufferLength = 0;
     let dataArray = null;
@@ -46,11 +44,11 @@ export default function PixelEqualizer({ analyserNode, status }) {
       const availH = Math.floor(rect.height);
       if (availW === 0 || availH === 0) return;
 
-      // Compute block sizes to fill available space
-      const blockW = Math.max(8, Math.floor(availW / COLS) - GAP);
-      const blockH = Math.max(4, Math.floor(availH / ROWS) - GAP);
-      const W = COLS * (blockW + GAP) - GAP;
-      const H = ROWS * (blockH + GAP) - GAP;
+      // Compute block sizes to fill the whole frame with many more columns.
+      const blockW = Math.max(2, Math.floor((availW - GAP * (COLS - 1)) / COLS));
+      const blockH = Math.max(2, Math.floor((availH - GAP * (ROWS - 1)) / ROWS));
+      const W = availW;
+      const H = availH;
 
       if (W !== sizeRef.current.W || H !== sizeRef.current.H) {
         canvas.width = W * dpr;
@@ -73,10 +71,14 @@ export default function PixelEqualizer({ analyserNode, status }) {
       let newBars;
       if (analyserNode && dataArray) {
         analyserNode.getByteFrequencyData(dataArray);
-        const step = Math.floor(bufferLength / COLS);
         newBars = Array.from({ length: COLS }, (_, i) => {
-          const val = dataArray[Math.min(i * step + step / 2, bufferLength - 1)] / 255;
-          return barsRef.current[i] * 0.7 + val * 0.3;
+          const pos = (i / Math.max(1, COLS - 1)) * (bufferLength - 1);
+          const lo = Math.floor(pos);
+          const hi = Math.min(bufferLength - 1, lo + 1);
+          const frac = pos - lo;
+          const val = ((dataArray[lo] || 0) * (1 - frac) + (dataArray[hi] || 0) * frac) / 255;
+          const boosted = Math.min(1, val * 1.45);
+          return barsRef.current[i] * 0.62 + boosted * 0.38;
         });
       } else {
         fakeTimeRef.current += 0.04;
@@ -120,7 +122,7 @@ export default function PixelEqualizer({ analyserNode, status }) {
           const isActive = row < filledRows;
 
           if (isActive) {
-            const color = row < 3 ? highlight : row < 7 ? accent : primary;
+            const color = row > ROWS * 0.78 ? highlight : row > ROWS * 0.52 ? accent : primary;
             ctx.fillStyle = color;
             ctx.shadowColor = color;
             ctx.shadowBlur = row >= filledRows - 1 ? 6 : 2;
@@ -164,8 +166,8 @@ export default function PixelEqualizer({ analyserNode, status }) {
   }, [analyserNode, status]);
 
   return (
-    <div className="visualizer-display" style={{ padding: 0, justifyContent: 'center' }} ref={containerRef}>
-      <canvas ref={canvasRef} style={{ background: '#0a0a0a', imageRendering: 'pixelated' }} />
+    <div className="visualizer-display" style={{ padding: 0, justifyContent: 'stretch', alignItems: 'stretch' }} ref={containerRef}>
+      <canvas ref={canvasRef} style={{ width: '100%', height: '100%', background: '#0a0a0a', imageRendering: 'pixelated' }} />
     </div>
   );
 }

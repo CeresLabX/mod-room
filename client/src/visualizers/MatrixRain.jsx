@@ -53,8 +53,9 @@ export default function MatrixRain({ analyserNode, status }) {
       const H = Math.floor(rect.height);
       if (W === 0 || H === 0) return;
 
-      const charH = Math.max(10, Math.floor(H / 20));
-      const charW = Math.max(7, Math.floor(charH * 0.75));
+      // Roughly 3x denser than before.
+      const charH = Math.max(6, Math.floor(H / 42));
+      const charW = Math.max(4, Math.floor(charH * 0.7));
 
       if (W !== sizeRef.current.W || H !== sizeRef.current.H) {
         canvas.width = W * dpr;
@@ -96,22 +97,22 @@ export default function MatrixRain({ analyserNode, status }) {
         setEnergy(e);
       }
 
-      const speedMult = 0.5 + e * 1.5;
+      const speedMult = 0.75 + e * 3.2;
 
       for (let ci = 0; ci < rainRef.current.length; ci++) {
         const col = rainRef.current[ci];
         col.y += col.speed * speedMult;
 
-        if (Math.random() < 0.05) {
+        if (Math.random() < 0.05 + e * 0.16) {
           const idx = Math.floor(Math.random() * col.chars.length);
           col.chars[idx] = TRACKER_CHARS[Math.floor(Math.random() * TRACKER_CHARS.length)];
         }
 
         if (col.y - col.length * charH > H) {
           col.y = -charH;
-          col.speed = 0.8 + Math.random() * 1.2;
-          col.length = 8 + Math.floor(Math.random() * 16);
-          col.bright = Math.random() > 0.8;
+          col.speed = 0.9 + Math.random() * (1.6 + e * 2.2);
+          col.length = 10 + Math.floor(Math.random() * 26);
+          col.bright = Math.random() > (0.84 - e * 0.35);
         }
 
         const x = ci * charW;
@@ -134,7 +135,7 @@ export default function MatrixRain({ analyserNode, status }) {
 
           if (alpha < 0.05) continue;
 
-          ctx.font = `bold ${charH - 2}px monospace`;
+          ctx.font = `bold ${Math.max(5, charH - 1)}px monospace`;
           ctx.textAlign = 'center';
           ctx.fillStyle = color + Math.floor(alpha * 220).toString(16).padStart(2, '0');
           ctx.shadowColor = color;
