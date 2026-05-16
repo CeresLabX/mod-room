@@ -257,14 +257,12 @@ export default function Visualizer({ analyserNode, status }) {
     }
   }, [selected]);
 
-  // No analyser → always show fake bars
-  if (!analyserNode) {
-    return <FakeBars count={BAR_COUNT} />;
-  }
+  const currentRegistry = registry.find(v => v.id === selected);
+  const otherOptions = registry.filter(v => v.id !== selected);
 
-  // None/off mode
+  let display;
   if (selected === VISUALIZER_NONE) {
-    return (
+    display = (
       <div className="visualizer-display" style={{ justifyContent: 'center', alignItems: 'center' }}>
         <div className="text-dim text-xs" style={{ textAlign: 'center' }}>
           <div style={{ fontSize: 24, marginBottom: 8 }}>○</div>
@@ -273,10 +271,19 @@ export default function Visualizer({ analyserNode, status }) {
         </div>
       </div>
     );
+  } else if (!analyserNode) {
+    // Keep the chooser visible even before Web Audio/analyser is ready.
+    display = <FakeBars count={BAR_COUNT} />;
+  } else {
+    display = (
+      <>
+        {selected === 'spectrum' && <SpectrumBars analyserNode={analyserNode} />}
+        {selected === 'scope' && <Oscilloscope analyserNode={analyserNode} />}
+        {selected === 'tracker' && <TrackerMeters analyserNode={analyserNode} />}
+        {LazyComp && <LazyComp analyserNode={analyserNode} status={status} />}
+      </>
+    );
   }
-
-  const currentRegistry = registry.find(v => v.id === selected);
-  const otherOptions = registry.filter(v => v.id !== selected);
 
   return (
     <>
@@ -310,10 +317,7 @@ export default function Visualizer({ analyserNode, status }) {
         )}
       </div>
 
-      {selected === 'spectrum' && <SpectrumBars analyserNode={analyserNode} />}
-      {selected === 'scope' && <Oscilloscope analyserNode={analyserNode} />}
-      {selected === 'tracker' && <TrackerMeters analyserNode={analyserNode} />}
-      {LazyComp && <LazyComp analyserNode={analyserNode} status={status} />}
+      {display}
     </>
   );
 }

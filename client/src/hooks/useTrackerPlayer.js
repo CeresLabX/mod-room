@@ -44,6 +44,9 @@ export function useTrackerPlayer({ item, audioContext, onEnded, onError }) {
 
   // ── Load a tracker file ─────────────────────────────────────────────
   const loadItem = useCallback(async (newItem) => {
+    const filename = newItem?.filename || newItem?.url?.split('/').pop() || 'unknown';
+    const ext = (filename || '').split('.').pop().toLowerCase();
+
     try {
       setStatus('loading');
       currentItemRef.current = newItem;
@@ -81,9 +84,6 @@ export function useTrackerPlayer({ item, audioContext, onEnded, onError }) {
       } finally {
         clearTimeout(timeout);
       }
-
-      const filename = newItem.filename || newItem.url.split('/').pop();
-      const ext = (filename || '').split('.').pop().toLowerCase();
 
       // Log for debugging non-.mod tracker files
       console.info(`[tracker-player] Loading: "${filename}" (.${ext}) from ${newItem.url}`);

@@ -207,7 +207,6 @@ export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onP
   const handleResync = () => {
     if (playback.timestamp !== undefined) {
       syncTo(playback.timestamp);
-      setCurrentTime(playback.timestamp);
     }
   };
 
