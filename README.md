@@ -53,6 +53,7 @@ cd server && npm start
 | `MAX_UPLOAD_SIZE_MB` | No | `100` | Max upload file size |
 | `KOOFR_EMAIL` | No | — | Koofr account email for WebDAV |
 | `KOOFR_PASSWORD` | No | — | Koofr WebDAV app password/token. Do **not** commit this value. |
+| `WEBDAV_ROOT_PATH` | No | `/Vectrix/public/music/mod` | Koofr WebDAV root path for library browser |
 
 ---
 
@@ -282,6 +283,9 @@ railway add --service postgresql
 railway variables set DATABASE_URL="postgresql://..."
 railway variables set NODE_ENV="production"
 railway variables set MAX_UPLOAD_SIZE_MB="100"
+railway variables set KOOFR_EMAIL="your@koofr.email"
+railway variables set KOOFR_PASSWORD="your-koofr-app-password"
+railway variables set WEBDAV_ROOT_PATH="/Vectrix/public/music/mod"
 ```
 
 ### 4. Deploy

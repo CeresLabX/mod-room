@@ -2,6 +2,19 @@
 
 ## Changes
 
+### Documentation Updates
+
+Added `WEBDAV_ROOT_PATH` environment variable to project documentation for consistency:
+
+**Files changed:**
+- `.env.example` — Added `WEBDAV_ROOT_PATH` with default `/Vectrix/public/music/mod`
+- `README.md` — Added `WEBDAV_ROOT_PATH` to Environment Variables table
+- `README.md` — Added Koofr environment variables to Railway Deployment section
+
+---
+
+## Previous Changes
+
 ### Library WebDAV Root Path Update
 
 The Library route WebDAV root path is now configured to `/Vectrix/mod` to align with the new Koofr structure.
@@ -19,8 +32,6 @@ The Library route WebDAV root path is now configured to `/Vectrix/mod` to align 
 - `server/routes/library.js` — Updated `WEBDAV_ROOT_PATH` default from `/Vectrix/public` to `/Vectrix/mod`
 
 ---
-
-## Previous Changes
 
 ### Koofr WebDAV Root Path Update
 
