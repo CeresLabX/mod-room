@@ -162,6 +162,7 @@ io.on('connection', (socket) => {
         visualizerId: room.visualizer_id || 'spectrum',
         serverTime: Date.now(),
         expectedPositionMs,
+        channelEnabled: roomSyncState.channelEnabled || Array(16).fill(true),
       },
       queue: queueRes.rows.map(q => ({
         id: q.id,
@@ -511,6 +512,25 @@ io.on('connection', (socket) => {
     io.to(currentRoom).emit('reaction', {
       nickname: currentNickname,
       emoji: safeEmoji,
+      ts: Date.now(),
+    });
+  });
+
+  socket.on('channel-mute-update', async ({ channelIndex, channelEnabled }) => {
+    if (!currentRoom || !currentNickname) return;
+    // Validate: channelIndex 0-15, channelEnabled is an array of 16 booleans
+    const idx = Number(channelIndex);
+    if (!Number.isFinite(idx) || idx < 0 || idx > 15) return;
+    if (!Array.isArray(channelEnabled) || channelEnabled.length !== 16) return;
+    if (!channelEnabled.every(v => typeof v === 'boolean')) return;
+
+    const roomSyncState = roomSync.getOrCreateActiveRoom(currentRoom);
+    roomSyncState.channelEnabled = channelEnabled.slice();
+
+    io.to(currentRoom).emit('channel-mute-update', {
+      nickname: currentNickname,
+      channelIndex: idx,
+      channelEnabled: roomSyncState.channelEnabled,
       ts: Date.now(),
     });
   });

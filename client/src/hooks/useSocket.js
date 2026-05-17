@@ -45,6 +45,7 @@ export function useSocket(handlers) {
     socket.on('reaction', (data) => handlersRef.current.onReaction?.(data));
     socket.on('seek', (data) => handlersRef.current.onSeek?.(data));
     socket.on('visualizer-update', (data) => handlersRef.current.onVisualizerUpdate?.(data));
+    socket.on('channel-mute-update', (data) => handlersRef.current.onChannelMuteUpdate?.(data));
     socket.on('error', (data) => handlersRef.current.onError?.(data));
 
     // Connect only after all listeners are attached. This prevents the room

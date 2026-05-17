@@ -39,7 +39,7 @@ function formatTime(s) {
   return `${m}:${sec.toString().padStart(2, '0')}`;
 }
 
-export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onPause, onStop, onSeek, onNext, emit, visualizerId, onVisualizerSelect }) {
+export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onPause, onStop, onSeek, onNext, emit, visualizerId, onVisualizerSelect, channelEnabled: channelEnabledProp, onChannelMuteUpdate }) {
   const [showVideo, setShowVideo] = useState(false);
   const [localStatus, setLocalStatus] = useState('idle');
   const [showFormatInfo, setShowFormatInfo] = useState(false);
@@ -124,6 +124,21 @@ export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onP
   useEffect(() => {
     syncStateRef.current = { currentTime, status, syncTo, play, isTracker: isTracker && !isPureMod, hasSeeking };
   }, [currentTime, status, syncTo, play, isTracker, isPureMod, hasSeeking]);
+
+  // Sync channelEnabled from server broadcast to the mod player worklet.
+  // When another user in the room toggles a channel, the server broadcasts
+  // the new 16-element array via channel-mute-update, which flows through
+  // RoomView → channelEnabledProp → here. We apply all 16 at once so the
+  // player state converges to the authoritative server value.
+  useEffect(() => {
+    if (!isPureMod || !channelEnabledProp || !modPlayer.channelEnabled) return;
+    // Only sync if the arrays differ (avoid loop: setChannelEnabledAt triggers its own update)
+    if (channelEnabledProp.some((v, i) => v !== modPlayer.channelEnabled[i])) {
+      modPlayer.channelEnabled.forEach((_, idx) => {
+        modPlayer.setChannelEnabledAt(idx, channelEnabledProp[idx]);
+      });
+    }
+  }, [channelEnabledProp, isPureMod, modPlayer.channelEnabled, modPlayer.setChannelEnabledAt]);
 
   // Periodic sync — correct drift
   useEffect(() => {
@@ -316,7 +331,14 @@ export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onP
                   key={i}
                   type="button"
                   className={`channel-toggle ${enabled ? 'enabled' : 'disabled'}`}
-                  onClick={() => setChannelEnabledAt?.(i, !enabled)}
+                  onClick={() => {
+                    const nextEnabled = [...(channelEnabled || Array(16).fill(true))];
+                    nextEnabled[i] = !enabled;
+                    // Update local player immediately
+                    setChannelEnabledAt?.(i, !enabled);
+                    // Emit to server to sync with all users in the room
+                    onChannelMuteUpdate?.(i, nextEnabled);
+                  }}
                   title={`${enabled ? 'Mute' : 'Enable'} MOD channel ${i + 1}`}
                 >
                   CH{String(i + 1).padStart(2, '0')} {enabled ? 'ON' : 'OFF'}

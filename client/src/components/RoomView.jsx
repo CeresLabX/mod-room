@@ -27,6 +27,7 @@ export default function RoomView({ theme, applyTheme }) {
   const [showAddMedia, setShowAddMedia] = useState(false);
   const [error, setError] = useState('');
   const [visualizerId, setVisualizerId] = useState('spectrum');
+  const [channelEnabled, setChannelEnabled] = useState(null); // null = use default; array = synced from server
 
   const playbackRef = useRef({ status: 'idle', itemId: null, timestamp: 0 });
   const queueRef = useRef([]);
@@ -45,6 +46,11 @@ export default function RoomView({ theme, applyTheme }) {
     setVisualizerId(data.room?.visualizerId || 'spectrum');
     queueRef.current = data.queue || [];
     usersRef.current = data.users || [];
+
+    // Hydrate channelEnabled from server state (for MOD file sync)
+    if (Array.isArray(data.room?.channelEnabled) && data.room.channelEnabled.length === 16) {
+      setChannelEnabled(data.room.channelEnabled);
+    }
 
     // Use expectedPositionMs from server if available (new sync system)
     const expectedTimestamp = data.room?.expectedPositionMs !== undefined
@@ -211,6 +217,14 @@ export default function RoomView({ theme, applyTheme }) {
     if (data?.visualizerId) setVisualizerId(data.visualizerId);
   }, []);
 
+  const handleChannelMuteUpdate = useCallback((data) => {
+    // Received from server: another user toggled a channel.
+    // Update the synced channel state so PlayerPanel + useModPlayer apply it.
+    if (Array.isArray(data.channelEnabled) && data.channelEnabled.length === 16) {
+      setChannelEnabled(data.channelEnabled);
+    }
+  }, []);
+
   const handleError = useCallback((data) => {
     setError(data.message);
     setTimeout(() => setError(''), 5000);
@@ -232,6 +246,7 @@ export default function RoomView({ theme, applyTheme }) {
     onReaction: onReactionFromServer,
     onSeek: onSeekFromServer,
     onVisualizerUpdate: handleVisualizerUpdate,
+    onChannelMuteUpdate: handleChannelMuteUpdate,
     onError: handleError,
   });
 
@@ -527,6 +542,13 @@ export default function RoomView({ theme, applyTheme }) {
           emit={emit}
           visualizerId={visualizerId}
           onVisualizerSelect={handleVisualizerSelect}
+          channelEnabled={channelEnabled}
+          onChannelMuteUpdate={(channelIndex, channelEnabledNext) => {
+            // Update local state immediately for responsive UI
+            setChannelEnabled(channelEnabledNext);
+            // Emit to server to broadcast to all other users
+            emit('channel-mute-update', { channelIndex, channelEnabled: channelEnabledNext });
+          }}
         />
 
         <QueuePanel

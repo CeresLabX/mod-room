@@ -15,6 +15,7 @@ function getOrCreateActiveRoom(roomId) {
       connectedUsers: new Set(),
       socketNicknames: new Map(),
       heartbeatInterval: null,
+      channelEnabled: Array(16).fill(true),
     });
   }
   return activeRooms.get(roomId);
