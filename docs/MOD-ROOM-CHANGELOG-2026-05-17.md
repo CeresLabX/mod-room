@@ -2,6 +2,26 @@
 
 ## Changes
 
+### Library WebDAV Root Path Update
+
+The Library route WebDAV root path is now configured to `/Vectrix/mod` to align with the new Koofr structure.
+
+**Previous behavior:**
+- `KOOFR_ROOT` was set to `/Vectrix/public` in `server/routes/library.js`
+- Library browser would list files from `/Vectrix/public/`
+
+**New behavior:**
+- `WEBDAV_ROOT_PATH` default updated to `/Vectrix/mod`
+- Library now points directly to the `/Vectrix/mod/` folder
+- Aligns with the Koofr `/Vectrix` root structure
+
+**Files changed:**
+- `server/routes/library.js` — Updated `WEBDAV_ROOT_PATH` default from `/Vectrix/public` to `/Vectrix/mod`
+
+---
+
+## Previous Changes
+
 ### Koofr WebDAV Root Path Update
 
 The Koofr WebDAV root path is now configurable via the `WEBDAV_ROOT_PATH` environment variable instead of being hardcoded.

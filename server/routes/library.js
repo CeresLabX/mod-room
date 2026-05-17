@@ -13,7 +13,7 @@ const {
   KOOFR_EMAIL: email,
   KOOFR_PASSWORD: password,
   KOOFR_BASE_URL: baseUrl = 'https://app.koofr.net/dav/Koofr',
-  WEBDAV_ROOT_PATH: webdavRoot = '/Vectrix/public',
+  WEBDAV_ROOT_PATH: webdavRoot = '/Vectrix/mod',
   LIBRARY_REINDEX_TOKEN: reindexToken,
   DATABASE_URL,
 } = process.env;
