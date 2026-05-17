@@ -13,10 +13,11 @@ const {
   KOOFR_EMAIL: email,
   KOOFR_PASSWORD: password,
   KOOFR_BASE_URL: baseUrl = 'https://app.koofr.net/dav/Koofr',
+  WEBDAV_ROOT_PATH: webdavRoot = '/Vectrix/public/music/mod',
 } = process.env;
 
-// Allowed path root — Koofr filesystem root is /Vectrix/public/
-const KOOFR_ROOT = '/Vectrix/public';
+// Allowed path root — Koofr filesystem root is /Vectrix/public/music/mod/
+const KOOFR_ROOT = webdavRoot;
 
 if (!email || !password) {
   console.warn('[koofr] KOOFR_EMAIL / KOOFR_PASSWORD not set — Koofr browsing disabled');
