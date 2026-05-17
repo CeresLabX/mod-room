@@ -53,7 +53,7 @@ cd server && npm start
 | `MAX_UPLOAD_SIZE_MB` | No | `100` | Max upload file size |
 | `KOOFR_EMAIL` | No | — | Koofr account email for WebDAV |
 | `KOOFR_PASSWORD` | No | — | Koofr WebDAV app password/token. Do **not** commit this value. |
-| `WEBDAV_ROOT_PATH` | No | `/Vectrix/public/music/mod` | Koofr WebDAV root path for library browser |
+| `WEBDAV_ROOT_PATH` | No | `/Vectrix/mod` | Koofr WebDAV root path for library browser |
 
 ---
 
@@ -92,9 +92,9 @@ cd server && npm start
 
 MOD Room can browse and stream tracker files directly from Koofr through the server-side WebDAV proxy.
 
-- Default Koofr folder: `/public/music/mod/`
-- Browser endpoint: `GET /api/koofr/list?path=/public/music/mod`
-- File proxy endpoint: `GET /api/koofr/file?path=/public/music/mod/<file.mod>`
+- Default Koofr folder: `/Vectrix/mod/`
+- Browser endpoint: `GET /api/koofr/list?path=/Vectrix/mod`
+- File proxy endpoint: `GET /api/koofr/file?path=/Vectrix/mod/<file.mod>`
 - The proxy keeps credentials server-side and adds CORS-safe headers for browser playback.
 - Koofr file streams are bounded with a timeout so an upstream stall does not wedge the app.
 - Tracker playback uses `useModPlayer.js` + `modplayer` AudioWorklet. Play/pause is controlled by `AudioContext.resume()` / `AudioContext.suspend()`.
@@ -285,7 +285,7 @@ railway variables set NODE_ENV="production"
 railway variables set MAX_UPLOAD_SIZE_MB="100"
 railway variables set KOOFR_EMAIL="your@koofr.email"
 railway variables set KOOFR_PASSWORD="your-koofr-app-password"
-railway variables set WEBDAV_ROOT_PATH="/Vectrix/public/music/mod"
+railway variables set WEBDAV_ROOT_PATH="/Vectrix/mod"
 ```
 
 ### 4. Deploy

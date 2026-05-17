@@ -2,6 +2,25 @@
 
 ## Changes
 
+### WEBDAV_ROOT_PATH Unified to /Vectrix/mod
+
+Unified both `koofr.js` and `library.js` routes to use the same `WEBDAV_ROOT_PATH` value.
+
+**Previous behavior:**
+- `server/routes/koofr.js` default: `/Vectrix/public/music/mod`
+- `server/routes/library.js` default: `/Vectrix/mod`
+
+**New behavior:**
+- Both routes now default to `/Vectrix/mod`
+- Updated comment in `koofr.js` to reflect the new root path
+
+**Files changed:**
+- `server/routes/koofr.js` — Updated `WEBDAV_ROOT_PATH` default from `/Vectrix/public/music/mod` to `/Vectrix/mod`
+- `.env.example` — Updated `WEBDAV_ROOT_PATH` default to `/Vectrix/mod`
+- `README.md` — Updated Environment Variables table and Railway Deployment section
+
+---
+
 ### Documentation Updates
 
 Added `WEBDAV_ROOT_PATH` environment variable to project documentation for consistency:

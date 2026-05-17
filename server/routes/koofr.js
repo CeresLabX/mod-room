@@ -13,10 +13,10 @@ const {
   KOOFR_EMAIL: email,
   KOOFR_PASSWORD: password,
   KOOFR_BASE_URL: baseUrl = 'https://app.koofr.net/dav/Koofr',
-  WEBDAV_ROOT_PATH: webdavRoot = '/Vectrix/public/music/mod',
+  WEBDAV_ROOT_PATH: webdavRoot = '/Vectrix/mod',
 } = process.env;
 
-// Allowed path root — Koofr filesystem root is /Vectrix/public/music/mod/
+// Allowed path root — Koofr filesystem root is /Vectrix/mod/
 const KOOFR_ROOT = webdavRoot;
 
 if (!email || !password) {
