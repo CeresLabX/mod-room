@@ -856,6 +856,37 @@ label {
 .activity-entry.add { color: var(--accent); }
 .activity-entry.remove { color: var(--error); }
 .activity-entry.reaction { color: var(--highlight); }
+.activity-entry.chat { color: var(--accent); }
+
+/* ─── CHAT INPUT ────────────────────────────────────────────────────────── */
+.chat-input-bar {
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.chat-input {
+  flex: 1;
+  font-family: var(--font-main);
+  font-size: var(--font-size-xs);
+  background: var(--input-bg);
+  color: var(--primary);
+  border: 1px solid var(--input-border);
+  padding: 6px 10px;
+  outline: none;
+  text-shadow: var(--glow-primary);
+}
+
+.chat-input:focus {
+  box-shadow: var(--glow-primary);
+}
+
+.chat-input::placeholder {
+  color: var(--dim);
+  text-shadow: none;
+}
 
 /* ─── REACTIONS ──────────────────────────────────────────────────────────── */
 .reactions-bar {

@@ -2,18 +2,24 @@
 
 ## Changes
 
+### Real-Time Text Chat
+
+Added real-time text chat functionality to rooms. Users can now send text messages that appear in the activity log for all room members.
+
+**Files changed:**
+- `server/index.js` — Added `chat-message` socket handler that sanitizes and broadcasts messages to all users in the room
+- `client/src/components/RoomView.jsx` — Added chat input bar with text input and SEND button, chat message handler
+- `client/src/styles/index.css` — Added styles for `.chat-input-bar`, `.chat-input`, and `.activity-entry.chat`
+
+**Features:**
+- Messages limited to 500 characters
+- Server-side sanitization for safety
+- Chat messages displayed in activity log with accent color
+- Integrated with existing Socket.IO infrastructure
+
+---
+
 ### WEBDAV_ROOT_PATH Unified to /Vectrix/mod
-
-Unified both `koofr.js` and `library.js` routes to use the same `WEBDAV_ROOT_PATH` value.
-
-**Previous behavior:**
-- `server/routes/koofr.js` default: `/Vectrix/public/music/mod`
-- `server/routes/library.js` default: `/Vectrix/mod`
-
-**New behavior:**
-- Both routes now default to `/Vectrix/mod`
-- Updated comment in `koofr.js` to reflect the new root path
-
 **Files changed:**
 - `server/routes/koofr.js` — Updated `WEBDAV_ROOT_PATH` default from `/Vectrix/public/music/mod` to `/Vectrix/mod`
 - `.env.example` — Updated `WEBDAV_ROOT_PATH` default to `/Vectrix/mod`

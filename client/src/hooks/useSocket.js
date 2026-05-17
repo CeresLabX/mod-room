@@ -43,6 +43,7 @@ export function useSocket(handlers) {
     socket.on('user-left', (data) => handlersRef.current.onUserLeft?.(data));
     socket.on('activity', (data) => handlersRef.current.onActivity?.(data));
     socket.on('reaction', (data) => handlersRef.current.onReaction?.(data));
+    socket.on('chat-message', (data) => handlersRef.current.onChatMessage?.(data));
     socket.on('seek', (data) => handlersRef.current.onSeek?.(data));
     socket.on('visualizer-update', (data) => handlersRef.current.onVisualizerUpdate?.(data));
     socket.on('channel-mute-update', (data) => handlersRef.current.onChannelMuteUpdate?.(data));

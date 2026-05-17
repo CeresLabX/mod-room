@@ -28,6 +28,7 @@ export default function RoomView({ theme, applyTheme }) {
   const [error, setError] = useState('');
   const [visualizerId, setVisualizerId] = useState('spectrum');
   const [channelEnabled, setChannelEnabled] = useState(null); // null = use default; array = synced from server
+  const [chatMessage, setChatMessage] = useState('');
 
   const playbackRef = useRef({ status: 'idle', itemId: null, timestamp: 0 });
   const queueRef = useRef([]);
@@ -207,6 +208,15 @@ export default function RoomView({ theme, applyTheme }) {
     }]);
   }, []);
 
+  const onChatMessageFromServer = useCallback((data) => {
+    setActivities(a => [...a.slice(-49), {
+      message: `${data.nickname}: ${data.text}`,
+      type: 'chat',
+      ts: data.ts,
+      nickname: data.nickname,
+    }]);
+  }, []);
+
   const onSeekFromServer = useCallback((data) => {
     playbackRef.current.timestamp = data.timestamp;
     setPlayback(prev => ({ ...prev, timestamp: data.timestamp }));
@@ -244,6 +254,7 @@ export default function RoomView({ theme, applyTheme }) {
     onUserLeft: handleUserLeft,
     onActivity: handleActivity,
     onReaction: onReactionFromServer,
+    onChatMessage: onChatMessageFromServer,
     onSeek: onSeekFromServer,
     onVisualizerUpdate: handleVisualizerUpdate,
     onChannelMuteUpdate: handleChannelMuteUpdate,
@@ -482,6 +493,14 @@ export default function RoomView({ theme, applyTheme }) {
     emit('reaction', { emoji });
   };
 
+  const handleSendChat = (e) => {
+    e.preventDefault();
+    const text = chatMessage.trim();
+    if (!text) return;
+    emit('chat-message', { text });
+    setChatMessage('');
+  };
+
   const handleVisualizerSelect = (id) => {
     setVisualizerId(id);
     emit('visualizer-select', { visualizerId: id });
@@ -566,6 +585,18 @@ export default function RoomView({ theme, applyTheme }) {
           <UserList users={users} nickname={nickname} hostNickname={roomData?.hostNickname} />
 
           <ActivityLog activities={activities} />
+
+          <form className="chat-input-bar" onSubmit={handleSendChat}>
+            <input
+              type="text"
+              className="chat-input"
+              placeholder="Type a message..."
+              value={chatMessage}
+              onChange={(e) => setChatMessage(e.target.value)}
+              maxLength={500}
+            />
+            <button type="submit" className="btn btn-small">SEND</button>
+          </form>
 
           <div className="reactions-bar">
             {REACTIONS.map(e => (

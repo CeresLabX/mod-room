@@ -516,6 +516,18 @@ io.on('connection', (socket) => {
     });
   });
 
+  // Text chat messages
+  socket.on('chat-message', async ({ text }) => {
+    if (!currentRoom || !currentNickname) return;
+    const safeText = sanitize(String(text || '').trim()).slice(0, 500);
+    if (!safeText) return;
+    io.to(currentRoom).emit('chat-message', {
+      nickname: currentNickname,
+      text: safeText,
+      ts: Date.now(),
+    });
+  });
+
   socket.on('channel-mute-update', async ({ channelIndex, channelEnabled }) => {
     if (!currentRoom || !currentNickname) return;
     // Validate: channelIndex 0-15, channelEnabled is an array of 16 booleans

@@ -362,7 +362,8 @@ Railway Persistent Volume (uploads/)
 - [x] Advanced visualizers (oscilloscope, tracker channels, starfield, VU meters, neon tunnel, plasma, pixel eq, piano roll, matrix rain)
 
 ### Phase 4
-- [ ] Activity log / reactions
+- [x] Activity log / reactions
+- [x] Real-time text chat
 - [ ] Host controls (kick, mute)
 - [ ] Room persistence tuning
 - [ ] Public deployment polish
