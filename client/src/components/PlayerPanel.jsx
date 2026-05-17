@@ -130,6 +130,8 @@ export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onP
   // the new 16-element array via channel-mute-update, which flows through
   // RoomView → channelEnabledProp → here. We apply all 16 at once so the
   // player state converges to the authoritative server value.
+  // Note: channelEnabled is also a dependency to ensure local state changes
+  // are properly synced when channelEnabledProp and local state diverge.
   useEffect(() => {
     if (!isPureMod || !channelEnabledProp || !modPlayer.channelEnabled) return;
     // Only sync if the arrays differ (avoid loop: setChannelEnabledAt triggers its own update)
@@ -138,7 +140,7 @@ export default function PlayerPanel({ item, playback, queue, isHost, onPlay, onP
         modPlayer.setChannelEnabledAt(idx, channelEnabledProp[idx]);
       });
     }
-  }, [channelEnabledProp, isPureMod, modPlayer.channelEnabled, modPlayer.setChannelEnabledAt]);
+  }, [channelEnabled, channelEnabledProp, isPureMod, modPlayer.channelEnabled, modPlayer.setChannelEnabledAt]);
 
   // Periodic sync — correct drift
   useEffect(() => {
